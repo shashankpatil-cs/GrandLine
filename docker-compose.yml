@@ -20,11 +20,10 @@
   frontend:
     build:
       context: ./frontend
-      args:
-        VITE_API_URL: ${VITE_API_URL}
+
     restart: unless-stopped
     env_file:
-      - ./backend/.env
+      - ./frontend/.env
     ports:
       - "5173:80"
     depends_on:

@@ -71,17 +71,6 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Qu
     username = username.strip()[:32] or "Anonymous"
     await manager.connect(room, username, websocket)
 
-    join_event = {
-        "id": f"sys_{ObjectId()}",
-        "room": room,
-        "username": username,
-        "text": f"{username} joined the chat",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "type": "system",
-    }
-    await manager.broadcast(room, join_event)
-    await manager.broadcast_presence(room)
-
     try:
         while True:
             raw = await websocket.receive_text()
@@ -114,16 +103,5 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Qu
                 )
 
     except WebSocketDisconnect:
-        left_username = manager.disconnect(room, websocket)
-        if left_username:
-            leave_event = {
-                "id": f"sys_{ObjectId()}",
-                "room": room,
-                "username": left_username,
-                "text": f"{left_username} left the chat",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "type": "system",
-            }
-            await manager.broadcast(room, leave_event)
-            await manager.broadcast_presence(room)
+        manager.disconnect(room, websocket)
 
