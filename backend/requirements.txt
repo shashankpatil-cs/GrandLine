@@ -8,3 +8,4 @@ pyjwt==2.8.0
 redis==5.0.1
 passlib==1.7.4
 bcrypt==4.0.1
+aiokafka==0.11.0

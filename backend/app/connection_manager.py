@@ -90,7 +90,7 @@ class ConnectionManager:
         users = await redis_client.smembers(f"room:{room}:users")
         return sorted(list(users))
 
-    async def broadcast(self, room: str, payload: dict, exclude: WebSocket | None = None):
+    async def local_broadcast(self, room: str, payload: dict, exclude: WebSocket | None = None):
         dead = []
         for ws in self.rooms.get(room, {}):
             if exclude is not None and ws == exclude:
@@ -101,6 +101,11 @@ class ConnectionManager:
                 dead.append(ws)
         for ws in dead:
             self.disconnect(room, ws)
+
+    async def broadcast(self, room: str, payload: dict, exclude: WebSocket | None = None):
+        from .kafka_client import publish_broadcast
+        # We publish to Kafka. The consumer will read this and call local_broadcast!
+        await publish_broadcast(payload)
 
     async def broadcast_presence(self, room: str):
         users = await self.get_online_users(room)

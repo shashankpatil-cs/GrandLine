@@ -11,12 +11,16 @@ from .database import messages_collection, init_db, redis_client
 from .models import serialize_message
 from .connection_manager import manager
 from .auth import router as auth_router, get_current_user
+from .kafka_client import init_kafka, close_kafka
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Hook up Kafka consumer to manager's local broadcast function
+    await init_kafka(manager.local_broadcast)
     yield
+    await close_kafka()
 
 
 app = FastAPI(title="Simple Chat", lifespan=lifespan)
@@ -76,18 +80,23 @@ async def get_history(room: str, limit: int = Query(30, le=200), user: dict = De
 
 
 async def save_message(room: str, username: str, text: str) -> dict:
+    from .kafka_client import publish_db_write
+    
     doc = {
+        "_id": str(ObjectId()),
         "room": room,
         "username": username,
         "text": text,
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "type": "message",
     }
-    result = await messages_collection.insert_one(doc)
-    doc["_id"] = result.inserted_id
+    
+    # 1. Throw it onto the Kafka belt for the background script to save!
+    await publish_db_write(doc)
+    
     msg = serialize_message(doc)
     
-    # Push to Redis and keep only last 30
+    # 2. Keep the instant Redis cache so the chat feels incredibly fast
     await redis_client.rpush(f"room:{room}:history", json.dumps(msg))
     await redis_client.ltrim(f"room:{room}:history", -30, -1)
     
@@ -149,15 +158,12 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Qu
             elif event_type == "read":
                 message_id = data.get("message_id")
                 if message_id:
-                    # Add user to the read list for this message
-                    await redis_client.sadd(f"msg:{message_id}:read_by", username)
-                    readers = await redis_client.smembers(f"msg:{message_id}:read_by")
-                    
-                    # Broadcast updated read receipts
-                    await manager.broadcast(
-                        room,
-                        {"type": "read_receipt", "message_id": message_id, "readers": sorted(list(readers))}
-                    )
+                    from .kafka_client import publish_read_receipt
+                    await publish_read_receipt({
+                        "message_id": message_id,
+                        "username": username,
+                        "room": room
+                    })
 
             elif event_type == "clear_chat":
                 await messages_collection.delete_many({"room": room})
