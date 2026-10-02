@@ -30,7 +30,7 @@ export default function ChatRoom({ username, room, token, onLeave }) {
   const [onlineUsers, setOnlineUsers] = useState([username]);
   const [connected, setConnected] = useState(false);
   const [draft, setDraft] = useState("");
-  const [typingUser, setTypingUser] = useState(null);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   const wsRef = useRef(null);
   const scrollRef = useRef(null);
@@ -97,13 +97,18 @@ export default function ChatRoom({ username, room, token, onLeave }) {
         if (data.type === "presence") {
           setOnlineUsers(data.users);
         } else if (data.type === "typing") {
-          if (data.username === username) return;
-          setTypingUser(data.username);
+          const others = data.typists.filter(u => u !== username);
+          setTypingUsers(others);
           clearTimeout(remoteTypingTimeoutRef.current);
-          remoteTypingTimeoutRef.current = setTimeout(() => setTypingUser(null), 2500);
+          remoteTypingTimeoutRef.current = setTimeout(() => setTypingUsers([]), 3000);
         } else if (data.type === "clear_chat") {
           setMessages([]);
+        } else if (data.type === "read_receipt") {
+          setMessages(prev => prev.map(m => m.id === data.message_id ? { ...m, readers: data.readers } : m));
         } else {
+          if (data.username !== username && data.id) {
+            ws.send(JSON.stringify({type: "read", message_id: data.id}));
+          }
           setMessages((prev) => {
             const key = data.id || `${data.type}-${data.timestamp}-${data.username}`;
             if (
@@ -169,7 +174,7 @@ export default function ChatRoom({ username, room, token, onLeave }) {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, typingUser]);
+  }, [messages, typingUsers]);
 
   function sendMessage(e) {
     e.preventDefault();
@@ -319,6 +324,11 @@ export default function ChatRoom({ username, room, token, onLeave }) {
                     )}
                     {mine && <div className="msg-meta">{timeLabel(m.timestamp)}</div>}
                     <div className="bubble">{m.text}</div>
+                    {m.readers && m.readers.filter(r => r !== username).length > 0 && (
+                      <div style={{fontSize: "11px", color: "gray", marginTop: "4px", textAlign: mine ? "right" : "left"}}>
+                        👁️ {m.readers.filter(r => r !== username).join(", ")}
+                      </div>
+                    )}
                   </div>
                 </div>
               </React.Fragment>
@@ -326,7 +336,11 @@ export default function ChatRoom({ username, room, token, onLeave }) {
           })}
         </div>
 
-        <div className="typing-row">{typingUser ? `${typingUser} is typing…` : ""}</div>
+        <div className="typing-row">
+          {typingUsers.length > 0
+            ? `${typingUsers.join(", ")} ${typingUsers.length > 1 ? "are" : "is"} typing…`
+            : ""}
+        </div>
 
         <form className="composer" onSubmit={sendMessage}>
           <input

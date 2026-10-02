@@ -4,6 +4,7 @@ from typing import Dict, Set, Tuple
 from fastapi import WebSocket
 from bson import ObjectId
 from datetime import datetime, timezone
+from .database import redis_client
 
 
 class ConnectionManager:
@@ -28,6 +29,9 @@ class ConnectionManager:
         if task:
             task.cancel()
             
+        # Add user to Redis Set for global presence
+        await redis_client.sadd(f"room:{room}:users", username)
+            
         # Only broadcast join if they weren't already connected AND there wasn't a cancelled disconnect
         # (If there was a cancelled disconnect, they never "left", so they don't need to "join" again)
         if not user_already_in_room and not task:
@@ -44,8 +48,10 @@ class ConnectionManager:
         elif task:
             # They reconnected, just broadcast presence to update frontend in case
             await self.broadcast_presence(room)
-        elif not user_already_in_room and task:
-            pass # Actually if user_already_in_room is false but task exists, they are just reconnecting
+        else:
+            # If they opened a second tab with the same user, they still need the presence list!
+            users = await self.get_online_users(room)
+            await websocket.send_text(json.dumps({"type": "presence", "room": room, "users": users}))
 
     def disconnect(self, room: str, websocket: WebSocket):
         if room in self.rooms and websocket in self.rooms[room]:
@@ -63,6 +69,9 @@ class ConnectionManager:
             await asyncio.sleep(2.0)
             self.disconnect_tasks.pop((room, username), None)
             
+            # Remove from Redis global presence
+            await redis_client.srem(f"room:{room}:users", username)
+            
             leave_event = {
                 "id": f"sys_{ObjectId()}",
                 "room": room,
@@ -76,8 +85,10 @@ class ConnectionManager:
         except asyncio.CancelledError:
             pass
 
-    def online_users(self, room: str) -> Set[str]:
-        return set(self.rooms.get(room, {}).values())
+    async def get_online_users(self, room: str) -> list:
+        # Fetch from Redis instead of local memory
+        users = await redis_client.smembers(f"room:{room}:users")
+        return sorted(list(users))
 
     async def broadcast(self, room: str, payload: dict, exclude: WebSocket | None = None):
         dead = []
@@ -92,9 +103,10 @@ class ConnectionManager:
             self.disconnect(room, ws)
 
     async def broadcast_presence(self, room: str):
+        users = await self.get_online_users(room)
         await self.broadcast(
             room,
-            {"type": "presence", "room": room, "users": sorted(self.online_users(room))},
+            {"type": "presence", "room": room, "users": users},
         )
 
 
