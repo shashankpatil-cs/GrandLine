@@ -15,8 +15,8 @@ export default function App() {
     return null;
   });
 
-  const handleJoin = (username, room) => {
-    const newSession = { username, room };
+  const handleJoin = (username, room, token) => {
+    const newSession = { username, room, token };
     setSession(newSession);
     localStorage.setItem("chatSession", JSON.stringify(newSession));
   };
@@ -34,6 +34,7 @@ export default function App() {
     <ChatRoom
       username={session.username}
       room={session.room}
+      token={session.token}
       onLeave={handleLeave}
     />
   );

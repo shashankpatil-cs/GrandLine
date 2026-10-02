@@ -25,7 +25,7 @@ function dayLabel(iso) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function ChatRoom({ username, room, onLeave }) {
+export default function ChatRoom({ username, room, token, onLeave }) {
   const [messages, setMessages] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([username]);
   const [connected, setConnected] = useState(false);
@@ -43,7 +43,12 @@ export default function ChatRoom({ username, room, onLeave }) {
   const loadHistory = useCallback(async () => {
     try {
       const res = await fetch(
-        `${API_BASE}/api/rooms/${encodeURIComponent(room)}/messages?limit=50`
+        `${API_BASE}/api/rooms/${encodeURIComponent(room)}/messages?limit=50`,
+        {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        }
       );
       if (!res.ok) {
         throw new Error(`Failed to load history: ${res.status}`);
@@ -68,7 +73,7 @@ export default function ChatRoom({ username, room, onLeave }) {
     } catch (err) {
       console.error("Failed to load history", err);
     }
-  }, [room]);
+  }, [room, token]);
 
   const connect = useCallback(() => {
     if (isUnmountedRef.current) return;

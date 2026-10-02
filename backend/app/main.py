@@ -3,13 +3,14 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
 
 from .database import messages_collection, init_db
 from .models import serialize_message
 from .connection_manager import manager
+from .auth import router as auth_router, get_current_user
 
 
 @asynccontextmanager
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Simple Chat", lifespan=lifespan)
+app.include_router(auth_router)
 
 cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
@@ -41,7 +43,7 @@ async def health():
 
 
 @app.get("/api/rooms/{room}/messages")
-async def get_history(room: str, limit: int = Query(50, le=200)):
+async def get_history(room: str, limit: int = Query(50, le=200), user: dict = Depends(get_current_user)):
     """Return the most recent messages for a room, oldest first."""
     cursor = (
         messages_collection.find({"room": room, "type": {"$ne": "system"}})

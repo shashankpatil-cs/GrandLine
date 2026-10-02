@@ -13,8 +13,9 @@ A fully-featured, real-time chat application inspired by One Piece. Built with F
 
 ## 🛠️ Tech Stack
 - **Frontend:** React + Vite, raw CSS (no UI frameworks)
-- **Backend:** Python + FastAPI, native WebSockets, Motor (async MongoDB driver)
+- **Backend:** Python + FastAPI, native WebSockets, pyjwt, Motor (async MongoDB driver)
 - **Database:** MongoDB
+- **Cache/Session:** Redis (for JWT refresh tokens)
 - **Deployment:** Fully Dockerized, `docker-compose` orchestration, `.env` management, dynamic port bindings ready for PaaS (Render, Heroku).
 
 ## 🚀 Run Locally with Docker
@@ -30,6 +31,15 @@ docker compose up --build
 - **Frontend UI:** `http://localhost:5173`
 - **Backend API:** `http://localhost:8000`
 - **MongoDB Database:** Safely exposed on `mongodb://localhost:27018` for local inspection (e.g., via MongoDB Compass).
+- **Redis Cache:** Accessible on `localhost:6379`.
+
+### 🔐 Authentication API
+
+With the recent update, users must register and log in to get access. Refresh tokens are securely stored in Redis.
+- **POST** `/api/auth/register` - Create an account
+- **POST** `/api/auth/login` - Login and get JWT access & refresh tokens
+- **POST** `/api/auth/refresh` - Swap a refresh token for a new access token
+- **POST** `/api/auth/logout` - Invalidate the refresh token in Redis
 
 Open the frontend in multiple browser tabs, choose the same room name, and start chatting!
 
