@@ -18,10 +18,16 @@ from .groups import router as groups_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    # Clear stale online presence from any previous session
+    # Clear stale online presence, user sessions, and statuses from previous runs
     stale_keys = await redis_client.keys("room:*:users")
     if stale_keys:
         await redis_client.delete(*stale_keys)
+    stale_sessions = await redis_client.keys("user_session:*")
+    if stale_sessions:
+        await redis_client.delete(*stale_sessions)
+    stale_statuses = await redis_client.keys("status:*")
+    if stale_statuses:
+        await redis_client.delete(*stale_statuses)
     # Hook up Kafka consumer to manager's local broadcast function
     await init_kafka(manager.local_broadcast)
     yield

@@ -109,6 +109,9 @@ export default function ChatRoom({ username, group, token, onLeave }) {
       reconnectAttemptsRef.current = 0;
       loadHistory();
       loadMembers();
+      // Announce initial status
+      const initialStatus = document.visibilityState === "visible" ? "active" : "away";
+      ws.send(JSON.stringify({ type: "status", status: initialStatus }));
     };
 
     ws.onmessage = (event) => {
@@ -157,9 +160,13 @@ export default function ChatRoom({ username, group, token, onLeave }) {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setConnected(false);
       if (isUnmountedRef.current) return;
+      if (event.code === 1008) {
+        console.warn("WebSocket closed due to auth or login from another location:", event.reason);
+        return;
+      }
 
       const baseDelay = 1000;
       const maxDelay = 15000;

@@ -18,7 +18,7 @@ class ConnectionManager:
 
     async def connect(self, room: str, username: str, websocket: WebSocket):
         await websocket.accept()
-        
+
         room_users = self.rooms.setdefault(room, {})
         user_already_in_room = username in room_users.values()
         
@@ -31,6 +31,17 @@ class ConnectionManager:
             
         # Add user to Redis Set for global presence
         await redis_client.sadd(f"room:{room}:users", username)
+
+        # Disconnect any existing websocket for this username across all rooms
+        # We don't manually pop them from self.rooms here. 
+        # Calling close() triggers WebSocketDisconnect, running normal disconnect() cleanup.
+        for r_name, connections in list(self.rooms.items()):
+            for old_ws, old_user in list(connections.items()):
+                if old_user == username and old_ws != websocket:
+                    try:
+                        await old_ws.close(code=1008, reason="New connection opened elsewhere")
+                    except Exception:
+                        pass
             
         # Only broadcast join if they weren't already connected AND there wasn't a cancelled disconnect
         # (If there was a cancelled disconnect, they never "left", so they don't need to "join" again)
@@ -69,8 +80,9 @@ class ConnectionManager:
             await asyncio.sleep(2.0)
             self.disconnect_tasks.pop((room, username), None)
             
-            # Remove from Redis global presence
+            # Remove from Redis global presence and clean status
             await redis_client.srem(f"room:{room}:users", username)
+            await redis_client.delete(f"status:{room}:{username}")
             
             leave_event = {
                 "id": f"sys_{ObjectId()}",

@@ -3,6 +3,8 @@ import Login from "./components/Login.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import ChatRoom from "./components/ChatRoom.jsx";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function App() {
   const [session, setSession] = useState(() => {
     const saved = localStorage.getItem("chatSession");
@@ -37,6 +39,49 @@ export default function App() {
       sessionStorage.removeItem("currentGroup");
     }
   }, [currentGroup]);
+
+  // Send periodic heartbeats to keep the active session alive
+  useEffect(() => {
+    if (!session?.token) return;
+
+    const sendHeartbeat = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/heartbeat`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.token}`
+          }
+        });
+        if (res.status === 401) {
+          alert("Your session has ended because this account logged in on another device.");
+          handleLogout();
+        }
+      } catch (err) {
+        console.error("Heartbeat error", err);
+      }
+    };
+
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 15000);
+    return () => clearInterval(interval);
+  }, [session?.token]);
+
+  // Release session immediately when tab is closed
+  useEffect(() => {
+    if (!session?.token) return;
+
+    const releaseSession = () => {
+      const url = `${API_BASE}/api/auth/release-session?token=${encodeURIComponent(session.token)}`;
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(url);
+      } else {
+        fetch(url, { method: "POST", keepalive: true }).catch(() => {});
+      }
+    };
+
+    window.addEventListener("pagehide", releaseSession);
+    return () => window.removeEventListener("pagehide", releaseSession);
+  }, [session?.token]);
 
   // Intercept ALL back/forward navigation via popstate
   useEffect(() => {
@@ -81,7 +126,19 @@ export default function App() {
     localStorage.setItem("chatSession", JSON.stringify(newSession));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (session?.token) {
+      try {
+        await fetch(`${API_BASE}/api/auth/logout`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${session.token}`
+          }
+        });
+      } catch (e) {
+        console.error("Logout error", e);
+      }
+    }
     setSession(null);
     setCurrentGroup(null);
     localStorage.removeItem("chatSession");

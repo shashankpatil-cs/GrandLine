@@ -9,6 +9,32 @@ export default function Login({ onAuth }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState(false);
+
+  async function handleForceLogin() {
+    const name = username.trim();
+    const pass = password.trim();
+    setError("");
+    try {
+      const formData = new URLSearchParams();
+      formData.append("username", name);
+      formData.append("password", pass);
+      const res = await fetch(`${API_BASE}/api/auth/login?force=true`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData.toString()
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || "Force login failed");
+      }
+      const data = await res.json();
+      setIsAlreadyLoggedIn(false);
+      onAuth(name, data.access_token);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -32,6 +58,7 @@ export default function Login({ onAuth }) {
       return;
     }
     setError("");
+    setIsAlreadyLoggedIn(false);
 
     try {
       if (isRegistering) {
@@ -57,6 +84,9 @@ export default function Login({ onAuth }) {
         });
         if (!res.ok) {
           const data = await res.json();
+          if (res.status === 409 || (data.detail && data.detail.includes("already logged in"))) {
+            setIsAlreadyLoggedIn(true);
+          }
           throw new Error(data.detail || "Login failed");
         }
         const data = await res.json();
@@ -164,7 +194,31 @@ export default function Login({ onAuth }) {
               </div>
             )}
 
-            {error && <div className="op-error">{error}</div>}
+            {error && (
+              <div className="op-error">
+                <div>{error}</div>
+                {isAlreadyLoggedIn && !isRegistering && (
+                  <button
+                    type="button"
+                    onClick={handleForceLogin}
+                    style={{
+                      marginTop: "10px",
+                      padding: "8px 12px",
+                      background: "#d63737",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "bold",
+                      width: "100%",
+                      fontFamily: "var(--font)"
+                    }}
+                  >
+                    Force Log In Here (Disconnect other session)
+                  </button>
+                )}
+              </div>
+            )}
 
             <button className="op-btn-primary" type="submit">
               {isRegistering ? "Create account" : "Log in"}
