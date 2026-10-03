@@ -24,11 +24,15 @@ class MessageOut(BaseModel):
 
 
 def serialize_message(doc) -> dict:
+    ts = doc["timestamp"]
+    if not isinstance(ts, str):
+        ts = ts.isoformat()
+        
     return {
         "id": str(doc["_id"]),
         "room": doc["room"],
         "username": doc["username"],
         "text": doc["text"],
-        "timestamp": doc["timestamp"].isoformat(),
+        "timestamp": ts,
         "type": doc.get("type", "message"),
     }

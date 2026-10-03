@@ -7,7 +7,7 @@ import redis.asyncio as redis
 from datetime import datetime
 
 KAFKA_URL = os.getenv("KAFKA_URL", "kafka:9092")
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27018")
+MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017")
 DB_NAME = os.getenv("DB_NAME", "chatdb")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
 
@@ -24,7 +24,7 @@ async def run_worker():
         "chat.messages.new",
         bootstrap_servers=KAFKA_URL,
         group_id="db_writer_group", # Fixed group ID so it acts like a work queue!
-        auto_offset_reset="earliest",
+        auto_offset_reset="latest",  # Only process NEW messages, not old ones on restart
         value_deserializer=lambda m: json.loads(m.decode('utf-8'))
     )
     
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             "chat.reads",
             bootstrap_servers=KAFKA_URL,
             group_id="db_writer_reads",
-            auto_offset_reset="earliest",
+            auto_offset_reset="latest",  # Only process NEW reads on restart
             value_deserializer=lambda m: json.loads(m.decode('utf-8'))
         )
         await consumer_reads.start()

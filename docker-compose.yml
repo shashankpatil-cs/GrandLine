@@ -14,7 +14,7 @@ services:
       - "6379:6379"
 
   kafka:
-    image: bitnami/kafka:latest
+    image: bitnamilegacy/kafka:latest
     restart: unless-stopped
     ports:
       - "9092:9092"

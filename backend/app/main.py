@@ -7,16 +7,21 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
 
-from .database import messages_collection, init_db, redis_client
+from .database import messages_collection, init_db, redis_client, group_members_collection
 from .models import serialize_message
 from .connection_manager import manager
-from .auth import router as auth_router, get_current_user
+from .auth import router as auth_router, get_current_user, get_user_from_token
 from .kafka_client import init_kafka, close_kafka
+from .groups import router as groups_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Clear stale online presence from any previous session
+    stale_keys = await redis_client.keys("room:*:users")
+    if stale_keys:
+        await redis_client.delete(*stale_keys)
     # Hook up Kafka consumer to manager's local broadcast function
     await init_kafka(manager.local_broadcast)
     yield
@@ -25,6 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Simple Chat", lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(groups_router)
 
 cors_origins_raw = os.getenv(
     "CORS_ORIGINS",
@@ -49,6 +55,12 @@ async def health():
 @app.get("/api/rooms/{room}/messages")
 async def get_history(room: str, limit: int = Query(30, le=200), user: dict = Depends(get_current_user)):
     """Return the most recent messages for a room, oldest first."""
+    # Verify membership
+    membership = await group_members_collection.find_one({"group_id": room, "username": user["username"], "status": "approved"})
+    if not membership:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Not authorized to view messages in this group")
+
     cached = await redis_client.lrange(f"room:{room}:history", 0, -1)
     if cached:
         return [json.loads(m) for m in cached]
@@ -104,8 +116,21 @@ async def save_message(room: str, username: str, text: str) -> dict:
 
 
 @app.websocket("/ws/{room}")
-async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Query(...)):
-    username = username.strip()[:32] or "Anonymous"
+async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query(...)):
+    try:
+        user = await get_user_from_token(token)
+    except Exception:
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+        
+    username = user["username"]
+    
+    # Verify membership
+    membership = await group_members_collection.find_one({"group_id": room, "username": username, "status": "approved"})
+    if not membership:
+        await websocket.close(code=1008, reason="Not an approved member")
+        return
+
     await manager.connect(room, username, websocket)
 
     try:
@@ -123,8 +148,8 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Qu
                 if not text:
                     continue
                 
-                # --- Rate Limiting (5 messages per 3 seconds) ---
-                rate_key = f"rate_limit:{username}"
+                # --- Rate Limiting (5 messages per 3 seconds, per room) ---
+                rate_key = f"rate_limit:{username}:{room}"
                 current_count = await redis_client.incr(rate_key)
                 if current_count == 1:
                     await redis_client.expire(rate_key, 3)
@@ -165,13 +190,24 @@ async def websocket_endpoint(websocket: WebSocket, room: str, username: str = Qu
                         "room": room
                     })
 
-            elif event_type == "clear_chat":
-                await messages_collection.delete_many({"room": room})
-                await redis_client.delete(f"room:{room}:history")
-                await manager.broadcast(
-                    room,
-                    {"type": "clear_chat", "room": room},
-                )
+            elif event_type == "status":
+                status = data.get("status")
+                if status in ["active", "away"]:
+                    # Save status to redis with an expiry so it doesn't linger forever
+                    await redis_client.setex(f"status:{room}:{username}", 3600, status)
+                    
+                    status_keys = await redis_client.keys(f"status:{room}:*")
+                    statuses = {}
+                    if status_keys:
+                        values = await redis_client.mget(status_keys)
+                        for key, val in zip(status_keys, values):
+                            uname = key.split(":")[-1]
+                            statuses[uname] = val
+                            
+                    await manager.broadcast(
+                        room,
+                        {"type": "status_update", "room": room, "statuses": statuses}
+                    )
 
     except WebSocketDisconnect:
         manager.disconnect(room, websocket)

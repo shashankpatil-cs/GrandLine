@@ -25,12 +25,16 @@ function dayLabel(iso) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function ChatRoom({ username, room, token, onLeave }) {
+export default function ChatRoom({ username, group, token, onLeave }) {
+  const room = group.name;
+  const roomId = group.id;
   const [messages, setMessages] = useState([]);
+  const [members, setMembers] = useState([]);
   const [onlineUsers, setOnlineUsers] = useState([username]);
   const [connected, setConnected] = useState(false);
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
+  const [userStatuses, setUserStatuses] = useState({}); // { username: "active" | "away" }
 
   const wsRef = useRef(null);
   const scrollRef = useRef(null);
@@ -39,11 +43,12 @@ export default function ChatRoom({ username, room, token, onLeave }) {
   const reconnectRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const isUnmountedRef = useRef(false);
+  const pendingReadsRef = useRef([]);
 
   const loadHistory = useCallback(async () => {
     try {
       const res = await fetch(
-        `${API_BASE}/api/rooms/${encodeURIComponent(room)}/messages?limit=50`,
+        `${API_BASE}/api/rooms/${roomId}/messages?limit=50`,
         {
           headers: {
             "Authorization": `Bearer ${token}`
@@ -73,13 +78,27 @@ export default function ChatRoom({ username, room, token, onLeave }) {
     } catch (err) {
       console.error("Failed to load history", err);
     }
-  }, [room, token]);
+  }, [roomId, token]);
+
+  const loadMembers = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/groups/${roomId}/members`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (!isUnmountedRef.current) setMembers(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [roomId, token]);
 
   const connect = useCallback(() => {
     if (isUnmountedRef.current) return;
 
-    const url = `${WS_BASE}/ws/${encodeURIComponent(room)}?username=${encodeURIComponent(
-      username
+    const url = `${WS_BASE}/ws/${roomId}?token=${encodeURIComponent(
+      token
     )}`;
     const ws = new WebSocket(url);
     wsRef.current = ws;
@@ -89,6 +108,7 @@ export default function ChatRoom({ username, room, token, onLeave }) {
       setConnected(true);
       reconnectAttemptsRef.current = 0;
       loadHistory();
+      loadMembers();
     };
 
     ws.onmessage = (event) => {
@@ -96,6 +116,7 @@ export default function ChatRoom({ username, room, token, onLeave }) {
         const data = JSON.parse(event.data);
         if (data.type === "presence") {
           setOnlineUsers(data.users);
+          loadMembers(); // Reload members to update is_online status
         } else if (data.type === "typing") {
           const others = data.typists.filter(u => u !== username);
           setTypingUsers(others);
@@ -105,9 +126,15 @@ export default function ChatRoom({ username, room, token, onLeave }) {
           setMessages([]);
         } else if (data.type === "read_receipt") {
           setMessages(prev => prev.map(m => m.id === data.message_id ? { ...m, readers: data.readers } : m));
+        } else if (data.type === "status_update") {
+          setUserStatuses(data.statuses);
         } else {
           if (data.username !== username && data.id) {
-            ws.send(JSON.stringify({type: "read", message_id: data.id}));
+            if (document.visibilityState === "visible") {
+              ws.send(JSON.stringify({type: "read", message_id: data.id}));
+            } else {
+              pendingReadsRef.current.push(data.id);
+            }
           }
           setMessages((prev) => {
             const key = data.id || `${data.type}-${data.timestamp}-${data.username}`;
@@ -152,7 +179,28 @@ export default function ChatRoom({ username, room, token, onLeave }) {
     ws.onerror = () => {
       ws.close();
     };
-  }, [room, username, loadHistory]);
+
+  }, [roomId, token, loadHistory, loadMembers]);
+
+  // Visibility change listener — registered once, not per reconnect
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const isVisible = document.visibilityState === "visible";
+      const status = isVisible ? "active" : "away";
+      ws.send(JSON.stringify({ type: "status", status }));
+
+      if (isVisible && pendingReadsRef.current.length > 0) {
+        pendingReadsRef.current.forEach(id => {
+          ws.send(JSON.stringify({ type: "read", message_id: id }));
+        });
+        pendingReadsRef.current = [];
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -200,9 +248,15 @@ export default function ChatRoom({ username, room, token, onLeave }) {
     }
   }
 
-  function clearChat() {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "clear_chat" }));
+  async function clearChat() {
+    if (group.admin !== username) return;
+    try {
+      await fetch(`${API_BASE}/api/groups/${roomId}/messages`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+    } catch (e) {
+      console.error(e);
     }
   }
 
@@ -224,13 +278,16 @@ export default function ChatRoom({ username, room, token, onLeave }) {
 
         <div className="sidebar-section">
           <h3 style={{ fontFamily: 'var(--font-pirate)', fontSize: '20px', color: '#e7e9f5', textTransform: 'none', letterSpacing: '1px' }}>Crew on deck</h3>
-          {onlineUsers.map((u) => (
-            <div className="user-row" key={u}>
-              <span className="avatar">{initials(u)}</span>
-              <span>{u === username ? `${u} (you)` : u}</span>
-              <span className="status-dot" />
-            </div>
-          ))}
+          {members.map((m) => {
+            const isAway = userStatuses[m.username] === "away";
+            return (
+              <div className={`user-row ${!m.is_online ? "offline" : ""}`} key={m.username} style={{ opacity: m.is_online ? (isAway ? 0.7 : 1) : 0.5 }}>
+                <span className="avatar">{initials(m.username)}</span>
+                <span>{m.username === username ? `${m.username} (you)` : m.username} {isAway && m.is_online && <span style={{fontSize: '12px', color: '#ffb347'}}>(away)</span>}</span>
+                {m.is_online && <span className="status-dot" style={{ background: isAway ? "#ffb347" : "#4caf50" }} />}
+              </div>
+            );
+          })}
         </div>
 
         <div className="sidebar-footer">
@@ -263,7 +320,9 @@ export default function ChatRoom({ username, room, token, onLeave }) {
             <div className="sub">{onlineUsers.length} crewmate here</div>
           </div>
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <button className="clear-btn" onClick={clearChat} style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}>Clear chat</button>
+            {group.admin === username && (
+              <button className="clear-btn" onClick={clearChat} style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}>Clear chat</button>
+            )}
             <div className={`connection-badge ${connected ? "online" : "offline"}`}>
             <span>{connected ? "●" : "○"}</span>
             {connected ? "Connected" : "Reconnecting…"}
@@ -324,7 +383,7 @@ export default function ChatRoom({ username, room, token, onLeave }) {
                     )}
                     {mine && <div className="msg-meta">{timeLabel(m.timestamp)}</div>}
                     <div className="bubble">{m.text}</div>
-                    {m.readers && m.readers.filter(r => r !== username).length > 0 && (
+                    {mine && m.readers && m.readers.filter(r => r !== username).length > 0 && (
                       <div style={{fontSize: "11px", color: "gray", marginTop: "4px", textAlign: mine ? "right" : "left"}}>
                         👁️ {m.readers.filter(r => r !== username).join(", ")}
                       </div>
