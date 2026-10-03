@@ -9,10 +9,10 @@ import secrets
 from .database import users_collection, redis_client
 from .models import UserCreate, Token, RefreshToken
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "supersecretkey_please_change")
-ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
-REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+SECRET_KEY = os.environ["JWT_SECRET_KEY"]
+ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"])
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ["REFRESH_TOKEN_EXPIRE_DAYS"])
 SESSION_TTL_SECONDS = 45
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

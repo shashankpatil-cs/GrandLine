@@ -3,7 +3,7 @@ import Login from "./components/Login.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import ChatRoom from "./components/ChatRoom.jsx";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function App() {
   const [session, setSession] = useState(() => {

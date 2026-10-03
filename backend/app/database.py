@@ -2,8 +2,8 @@ import os
 from motor.motor_asyncio import AsyncIOMotorClient
 import redis.asyncio as redis
 
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017")
-DB_NAME = os.getenv("DB_NAME", "chatdb")
+MONGO_URL = os.environ["MONGO_URL"]
+DB_NAME = os.environ["DB_NAME"]
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -13,7 +13,7 @@ users_collection = db["users"]
 groups_collection = db["groups"]
 group_members_collection = db["group_members"]
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+REDIS_URL = os.environ["REDIS_URL"]
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 

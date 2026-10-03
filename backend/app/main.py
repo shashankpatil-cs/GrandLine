@@ -38,10 +38,7 @@ app = FastAPI(title="Simple Chat", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(groups_router)
 
-cors_origins_raw = os.getenv(
-    "CORS_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000",
-)
+cors_origins_raw = os.environ["CORS_ORIGINS"]
 allowed_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
 
 app.add_middleware(

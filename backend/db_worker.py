@@ -6,10 +6,10 @@ from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import redis.asyncio as redis
 from datetime import datetime
 
-KAFKA_URL = os.getenv("KAFKA_URL", "kafka:9092")
-MONGO_URL = os.getenv("MONGO_URL", "mongodb://mongo:27017")
-DB_NAME = os.getenv("DB_NAME", "chatdb")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379")
+KAFKA_URL = os.environ["KAFKA_URL"]
+MONGO_URL = os.environ["MONGO_URL"]
+DB_NAME = os.environ["DB_NAME"]
+REDIS_URL = os.environ["REDIS_URL"]
 
 async def run_worker():
     print("Starting DB Worker...", flush=True)

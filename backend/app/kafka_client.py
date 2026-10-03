@@ -3,7 +3,7 @@ import json
 import asyncio
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
-KAFKA_URL = os.getenv("KAFKA_URL", "kafka:9092")
+KAFKA_URL = os.environ["KAFKA_URL"]
 
 producer = None
 consumer_task = None
