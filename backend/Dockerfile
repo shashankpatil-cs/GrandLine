@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
 COPY db_worker.py .
+COPY ca.pem .
 
 EXPOSE 8000
 
