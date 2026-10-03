@@ -1,15 +1,31 @@
 import os
 import json
 import asyncio
+import ssl
 from motor.motor_asyncio import AsyncIOMotorClient
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import redis.asyncio as redis
 from datetime import datetime
 
 KAFKA_URL = os.environ["KAFKA_URL"]
+KAFKA_USER = os.environ.get("KAFKA_USER")
+KAFKA_PASSWORD = os.environ.get("KAFKA_PASSWORD")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 REDIS_URL = os.environ["REDIS_URL"]
+
+def get_kafka_kwargs():
+    if KAFKA_USER:
+        context = ssl.create_default_context(cafile="ca.pem") if os.path.exists("ca.pem") else ssl.create_default_context()
+        return {
+            "bootstrap_servers": KAFKA_URL,
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": "SCRAM-SHA-256",
+            "sasl_plain_username": KAFKA_USER,
+            "sasl_plain_password": KAFKA_PASSWORD,
+            "ssl_context": context
+        }
+    return {"bootstrap_servers": KAFKA_URL}
 
 async def run_worker():
     print("Starting DB Worker...", flush=True)
@@ -22,10 +38,10 @@ async def run_worker():
     # Connect to Kafka
     consumer = AIOKafkaConsumer(
         "chat.messages.new",
-        bootstrap_servers=KAFKA_URL,
         group_id="db_writer_group", # Fixed group ID so it acts like a work queue!
         auto_offset_reset="latest",  # Only process NEW messages, not old ones on restart
-        value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+        **get_kafka_kwargs()
     )
     
     await consumer.start()
@@ -57,15 +73,15 @@ if __name__ == "__main__":
     async def consume_reads():
         print("Starting Reads Batch Worker...", flush=True)
         redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-        producer = AIOKafkaProducer(bootstrap_servers=KAFKA_URL)
+        producer = AIOKafkaProducer(**get_kafka_kwargs())
         await producer.start()
         
         consumer_reads = AIOKafkaConsumer(
             "chat.reads",
-            bootstrap_servers=KAFKA_URL,
             group_id="db_writer_reads",
             auto_offset_reset="latest",  # Only process NEW reads on restart
-            value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            **get_kafka_kwargs()
         )
         await consumer_reads.start()
         

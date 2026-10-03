@@ -1,26 +1,41 @@
 import os
 import json
 import asyncio
+import ssl
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 
 KAFKA_URL = os.environ["KAFKA_URL"]
+KAFKA_USER = os.environ.get("KAFKA_USER")
+KAFKA_PASSWORD = os.environ.get("KAFKA_PASSWORD")
 
 producer = None
 consumer_task = None
 
+def get_kafka_kwargs():
+    if KAFKA_USER:
+        context = ssl.create_default_context(cafile="ca.pem") if os.path.exists("ca.pem") else ssl.create_default_context()
+        return {
+            "bootstrap_servers": KAFKA_URL,
+            "security_protocol": "SASL_SSL",
+            "sasl_mechanism": "SCRAM-SHA-256",
+            "sasl_plain_username": KAFKA_USER,
+            "sasl_plain_password": KAFKA_PASSWORD,
+            "ssl_context": context
+        }
+    return {"bootstrap_servers": KAFKA_URL}
 async def init_kafka(local_broadcast_callback):
     global producer, consumer_task
     
-    producer = AIOKafkaProducer(bootstrap_servers=KAFKA_URL)
+    producer = AIOKafkaProducer(**get_kafka_kwargs())
     await producer.start()
 
     # Unique group_id for each backend instance ensures all instances receive the broadcast!
     group_id = f"chat_backend_{os.urandom(4).hex()}"
     consumer = AIOKafkaConsumer(
         "chat_broadcast",
-        bootstrap_servers=KAFKA_URL,
         group_id=group_id,
-        auto_offset_reset="latest" # Only care about live messages
+        auto_offset_reset="latest", # Only care about live messages
+        **get_kafka_kwargs()
     )
     await consumer.start()
 
