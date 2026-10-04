@@ -153,9 +153,11 @@ async def generate_gpt_response(room: str, prompt: str):
         # Show typing indicator
         await manager.broadcast(room, {"type": "typing", "room": room, "typists": ["GPT-Bot"]})
         
+        model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        
         client = openai.AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=model_name,
             messages=[
                 {"role": "system", "content": "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful."},
                 {"role": "user", "content": prompt}
