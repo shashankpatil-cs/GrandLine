@@ -150,6 +150,8 @@ export default function ChatRoom({ username, group, token, onLeave }) {
           setMessages(prev => prev.map(m => m.id === data.message_id ? { ...m, readers: data.readers } : m));
         } else if (data.type === "status_update") {
           setUserStatuses(data.statuses);
+        } else if (data.type === "ping") {
+          return; // Ignore keep-alive pings
         } else {
           if (data.username !== username && data.id) {
             if (document.visibilityState === "visible") {
