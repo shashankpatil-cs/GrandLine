@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import ReactMarkdown from 'react-markdown';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const WS_BASE = API_BASE.replace(/^http/, "ws");
@@ -454,9 +455,15 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                           <p>{m.reply_to.text}</p>
                         </div>
                       )}
-                      <div className="bubble">
-                        {m.text.length > 300 && !expandedMessages[m.id] ? `${m.text.slice(0, 300)}...` : m.text}
-                        {m.text.length > 300 && (
+                      <div className="bubble markdown-body" style={{
+                        /* Basic overrides to make markdown look good inside a chat bubble */
+                        wordBreak: 'break-word',
+                        margin: 0
+                      }}>
+                        <ReactMarkdown>
+                          {m.text.length > 500 && !expandedMessages[m.id] ? `${m.text.slice(0, 500)}...` : m.text}
+                        </ReactMarkdown>
+                        {m.text.length > 500 && (
                           <button 
                             onClick={() => toggleMessage(m.id)}
                             style={{
@@ -465,8 +472,9 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                               color: "var(--accent)",
                               fontSize: "12px",
                               cursor: "pointer",
-                              padding: "0 4px",
-                              fontWeight: "bold"
+                              padding: "4px 0 0 0",
+                              fontWeight: "bold",
+                              display: "block"
                             }}
                           >
                             {expandedMessages[m.id] ? "Show less" : "Read more"}
