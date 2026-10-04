@@ -4,6 +4,8 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import openai
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
@@ -138,6 +140,37 @@ async def save_message(room: str, username: str, text: str, reply_to: dict = Non
     return msg
 
 
+async def generate_gpt_response(room: str, prompt: str):
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        msg = await save_message(room, "GPT-Bot", "I am unable to answer right now: OPENAI_API_KEY is not set.")
+        from .connection_manager import manager
+        await manager.broadcast(room, msg)
+        return
+
+    try:
+        from .connection_manager import manager
+        # Show typing indicator
+        await manager.broadcast(room, {"type": "typing", "room": room, "typists": ["GPT-Bot"]})
+        
+        client = openai.AsyncOpenAI(api_key=api_key)
+        response = await client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300
+        )
+        answer = response.choices[0].message.content
+        msg = await save_message(room, "GPT-Bot", answer)
+        await manager.broadcast(room, msg)
+    except Exception as e:
+        from .connection_manager import manager
+        msg = await save_message(room, "GPT-Bot", f"Oops! I ran into an error: {str(e)}")
+        await manager.broadcast(room, msg)
+
+
 @app.websocket("/ws/{room}")
 async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query(...)):
     try:
@@ -190,6 +223,12 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
                 
                 msg = await save_message(room, username, text[:2000], reply_to)
                 await manager.broadcast(room, msg)
+                
+                # --- GPT BOT FEATURE ---
+                if text.startswith("@gpt "):
+                    prompt = text[len("@gpt "):].strip()
+                    if prompt:
+                        asyncio.create_task(generate_gpt_response(room, prompt))
 
             elif event_type == "typing":
                 # Save typing status in Redis for 3 seconds
