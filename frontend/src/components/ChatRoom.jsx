@@ -375,9 +375,42 @@ export default function ChatRoom({ username, group, token, onLeave }) {
               <path d="M54,10 L70,5 L54,18 Z" fill="#222"/>
             </svg>
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h2 style={{ fontFamily: 'var(--font-pirate)', fontSize: '32px', margin: 0, fontWeight: 'normal', color: '#fff', letterSpacing: '1px' }}># {room}</h2>
             <div className="sub">{onlineUsers.length} crewmate here</div>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
+            <label style={{ fontSize: '12px', color: 'var(--text-dim)' }}>AI Style:</label>
+            <select 
+              style={{ background: 'var(--bg-panel-alt)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px', fontSize: '13px', cursor: 'pointer', maxWidth: '160px' }}
+              onChange={(e) => {
+                let val = e.target.value;
+                if (!val) return;
+                
+                if (val === "custom") {
+                  val = window.prompt("Enter a custom behavior instruction for the AI:");
+                  if (!val) {
+                    e.target.value = "";
+                    return;
+                  }
+                }
+                
+                if (wsRef.current?.readyState === WebSocket.OPEN && val) {
+                  wsRef.current.send(JSON.stringify({ type: "message", text: `@gpt-persona ${val}` }));
+                }
+                e.target.value = ""; // reset selection
+              }}
+              defaultValue=""
+            >
+              <option value="" disabled>Change Persona...</option>
+              <option value="default">Default Assistant</option>
+              <option value="talk in Nagpuri style gaali vaali potte jasi basha">Nagpuri (Gaali/Potte)</option>
+              <option value="reply in authentic Vidharbha / Hyderabadi dialect">Vidharbha / Hyderabadi</option>
+              <option value="talk in pure marathi using aai chi puchi vulgar language">Pure Marathi (Vulgar)</option>
+              <option value="talk like a pirate from the anime One Piece, use lots of pirate slang">Pirate (One Piece)</option>
+              <option value="custom">✍️ Type Custom Behavior...</option>
+            </select>
           </div>
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {group.admin === username && (
