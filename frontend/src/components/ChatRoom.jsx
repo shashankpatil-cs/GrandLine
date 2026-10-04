@@ -39,6 +39,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   const [expandedSeen, setExpandedSeen] = useState({});
   const [expandedMessages, setExpandedMessages] = useState({});
   const [showAllUsers, setShowAllUsers] = useState(false);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   const toggleSeen = (msgId) => {
     setExpandedSeen(prev => ({ ...prev, [msgId]: !prev[msgId] }));
@@ -61,7 +62,9 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    isAtBottomRef.current = isAtBottom;
+    setShowScrollBottom(!isAtBottom);
   }, []);
 
   const loadHistory = useCallback(async () => {
@@ -272,6 +275,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
     setDraft("");
     setReplyingTo(null);
     isAtBottomRef.current = true; // Force scroll to bottom when sending a message
+    setShowScrollBottom(false);
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -379,39 +383,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
             <h2 style={{ fontFamily: 'var(--font-pirate)', fontSize: '32px', margin: 0, fontWeight: 'normal', color: '#fff', letterSpacing: '1px' }}># {room}</h2>
             <div className="sub">{onlineUsers.length} crewmate here</div>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '16px' }}>
-            <label style={{ fontSize: '12px', color: 'var(--text-dim)' }}>AI Style:</label>
-            <select 
-              style={{ background: 'var(--bg-panel-alt)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px', fontSize: '13px', cursor: 'pointer', maxWidth: '160px' }}
-              onChange={(e) => {
-                let val = e.target.value;
-                if (!val) return;
-                
-                if (val === "custom") {
-                  val = window.prompt("Enter a custom behavior instruction for the AI:");
-                  if (!val) {
-                    e.target.value = "";
-                    return;
-                  }
-                }
-                
-                if (wsRef.current?.readyState === WebSocket.OPEN && val) {
-                  wsRef.current.send(JSON.stringify({ type: "message", text: `@gpt-persona ${val}` }));
-                }
-                e.target.value = ""; // reset selection
-              }}
-              defaultValue=""
-            >
-              <option value="" disabled>Change Persona...</option>
-              <option value="default">Default Assistant</option>
-              <option value="talk in Nagpuri style gaali vaali potte jasi basha">Nagpuri (Gaali/Potte)</option>
-              <option value="reply in authentic Vidharbha / Hyderabadi dialect">Vidharbha / Hyderabadi</option>
-              <option value="talk in pure marathi using aai chi puchi vulgar language">Pure Marathi (Vulgar)</option>
-              <option value="talk like a pirate from the anime One Piece, use lots of pirate slang">Pirate (One Piece)</option>
-              <option value="custom">✍️ Type Custom Behavior...</option>
-            </select>
-          </div>
+
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             {group.admin === username && (
               <button className="clear-btn" onClick={clearChat} style={{ padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', fontSize: '13px', color: 'var(--text)' }}>Clear chat</button>
@@ -530,6 +502,34 @@ export default function ChatRoom({ username, group, token, onLeave }) {
               </React.Fragment>
             );
           })}
+          {showScrollBottom && (
+            <button
+              onClick={() => {
+                isAtBottomRef.current = true;
+                setShowScrollBottom(false);
+                scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+              }}
+              style={{
+                position: "absolute",
+                bottom: "100px",
+                right: "20px",
+                background: "var(--accent)",
+                color: "#0a1922",
+                border: "none",
+                borderRadius: "50%",
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+                zIndex: 10
+              }}
+            >
+              ▼
+            </button>
+          )}
         </div>
 
         <div className="typing-row">

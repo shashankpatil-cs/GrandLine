@@ -155,18 +155,11 @@ async def generate_gpt_response(room: str, prompt: str):
         
         model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
         
-        # Fetch custom persona from Redis
-        custom_persona = await redis_client.get(f"room:{room}:gpt_persona")
-        if custom_persona:
-            system_content = f"You are an AI participant in a group chat. You MUST adopt the following persona/style: '{custom_persona}'. Always stay completely in character. Keep answers concise."
-        else:
-            system_content = "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful."
-        
         client = openai.AsyncOpenAI(api_key=api_key)
         response = await client.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": system_content},
+                {"role": "system", "content": "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300
@@ -238,18 +231,6 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
                     prompt = text[len("@gpt "):].strip()
                     if prompt:
                         asyncio.create_task(generate_gpt_response(room, prompt))
-                elif text.startswith("@gpt-persona "):
-                    new_persona = text[len("@gpt-persona "):].strip()
-                    if new_persona.lower() == "default":
-                        await redis_client.delete(f"room:{room}:gpt_persona")
-                        msg = await save_message(room, "GPT-Bot", "🤖 My persona has been reset to default.")
-                        msg["type"] = "system" # show as system message
-                        await manager.broadcast(room, msg)
-                    elif new_persona:
-                        await redis_client.set(f"room:{room}:gpt_persona", new_persona)
-                        msg = await save_message(room, "GPT-Bot", f"🤖 My persona has been set to: {new_persona}")
-                        msg["type"] = "system"
-                        await manager.broadcast(room, msg)
 
             elif event_type == "typing":
                 # Save typing status in Redis for 3 seconds
