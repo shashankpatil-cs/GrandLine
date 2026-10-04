@@ -46,15 +46,6 @@ class ConnectionManager:
         # Only broadcast join if they weren't already connected AND there wasn't a cancelled disconnect
         # (If there was a cancelled disconnect, they never "left", so they don't need to "join" again)
         if not user_already_in_room and not task:
-            join_event = {
-                "id": f"sys_{ObjectId()}",
-                "room": room,
-                "username": username,
-                "text": f"{username} joined the chat",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "type": "system",
-            }
-            await self.broadcast(room, join_event)
             await self.broadcast_presence(room)
         elif task:
             # They reconnected, just broadcast presence to update frontend in case
@@ -84,15 +75,6 @@ class ConnectionManager:
             await redis_client.srem(f"room:{room}:users", username)
             await redis_client.delete(f"status:{room}:{username}")
             
-            leave_event = {
-                "id": f"sys_{ObjectId()}",
-                "room": room,
-                "username": username,
-                "text": f"{username} left the chat",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "type": "system",
-            }
-            await self.broadcast(room, leave_event)
             await self.broadcast_presence(room)
         except asyncio.CancelledError:
             pass
