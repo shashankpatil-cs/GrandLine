@@ -227,8 +227,8 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
                 await manager.broadcast(room, msg)
                 
                 # --- GPT BOT FEATURE ---
-                if text.startswith("@gpt "):
-                    prompt = text[len("@gpt "):].strip()
+                if text.startswith("@ai "):
+                    prompt = text[len("@ai "):].strip()
                     if prompt:
                         asyncio.create_task(generate_gpt_response(room, prompt))
 
