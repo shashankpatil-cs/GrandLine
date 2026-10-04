@@ -28,7 +28,7 @@ def serialize_message(doc) -> dict:
     if not isinstance(ts, str):
         ts = ts.isoformat()
         
-    return {
+    ret = {
         "id": str(doc["_id"]),
         "room": doc["room"],
         "username": doc["username"],
@@ -36,3 +36,6 @@ def serialize_message(doc) -> dict:
         "timestamp": ts,
         "type": doc.get("type", "message"),
     }
+    if "reply_to" in doc:
+        ret["reply_to"] = doc["reply_to"]
+    return ret

@@ -75,7 +75,7 @@ export default function App() {
       if (navigator.sendBeacon) {
         navigator.sendBeacon(url);
       } else {
-        fetch(url, { method: "POST", keepalive: true }).catch(() => {});
+        fetch(url, { method: "POST", keepalive: true }).catch(() => { });
       }
     };
 
@@ -91,7 +91,7 @@ export default function App() {
         // Immediately push state back to the room before the confirm dialog blocks the thread
         // This ensures that even if they spam back, there's always history ahead of them.
         window.history.pushState({ page: "inroom" }, "", `#${group.id}`);
-        
+
         const confirmLeave = window.confirm("Are you sure you want to leave this crew?");
         if (confirmLeave) {
           setCurrentGroup(null);
@@ -113,7 +113,7 @@ export default function App() {
 
     window.addEventListener("popstate", handlePopState);
     window.addEventListener("beforeunload", handleBeforeUnload);
-    
+
     return () => {
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("beforeunload", handleBeforeUnload);

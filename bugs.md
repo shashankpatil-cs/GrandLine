@@ -50,3 +50,19 @@ The frontend's `ws.onclose` event handler treated all disconnections equally. Wh
 
 **Solution:**
 We added an explicit intercept in the `ws.onclose` listener for the `1008` close code. If this specific code is detected, the frontend logs a warning to the console and aborts the auto-reconnect loop entirely, gracefully accepting the eviction and saving system resources.
+
+---
+
+## 4. The Production "Unseen" Bug
+
+**The Problem Faced:**
+In production, the "seen" (read receipts) feature worked flawlessly for active users chatting in real time. However, when users refreshed the page or joined a room later, historical messages didn't show who had read them, making it look like the feature was completely broken.
+
+**The Bug Discovered:**
+When fetching chat history via `/api/rooms/{room}/messages`, the backend had a fast-path that returned messages directly from the Redis cache (`room:{room}:history`). Because the backend attached read receipts *after* the caching logic but conditionally skipped it if the cache was hit, cached messages were returned bare, without their associated `readers` field populated.
+
+**Cause:**
+When a message was originally sent, it was immediately added to the Redis list cache (for lightning-fast load times). At that exact instant, the message had zero readers. Later, as users read the message, their names were added to a separate Redis set (`msg:{id}:read_by`). The history endpoint's `if cached:` short-circuit returned the original cached payload without executing the subsequent pipeline block that dynamically stitched the `msg:{id}:read_by` sets onto the returned message objects.
+
+**Solution:**
+We refactored the history fetching logic to separate the retrieval of the base messages from the attachment of the live read receipts. Now, whether the base messages are pulled from the lightning-fast Redis cache or from the MongoDB fallback, the request *always* flows through the Redis pipeline block that queries the `msg:{id}:read_by` sets and attaches the live readers to each message before returning the payload to the client.

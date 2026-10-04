@@ -1,0 +1,616 @@
+﻿diff --git a/README.md b/README.md
+index 01f81d5..6e81a21 100644
+--- a/README.md
++++ b/README.md
+@@ -1,26 +1,42 @@
+-# ≡ƒÅ┤ΓÇìΓÿá∩╕Å Grandline Chat
++<div align="center">
++  <img src="https://img.icons8.com/color/96/000000/one-piece.png" alt="One Piece Logo" width="100"/>
++  <h1>≡ƒÅ┤ΓÇìΓÿá∩╕Å Grandline Chat</h1>
++  <p><i>A fully-featured, real-time chat application inspired by One Piece.</i></p>
++  
++  <p>
++    <img src="https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi" alt="FastAPI" />
++    <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
++    <img src="https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white" alt="MongoDB" />
++    <img src="https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
++    <img src="https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white" alt="Redis" />
++  </p>
++</div>
+ 
+-A fully-featured, real-time chat application inspired by One Piece. Built with FastAPI (WebSockets), React, and MongoDB, this app provides a seamless and persistent chat experience for users sailing the Grand Line.
++<br/>
+ 
+-## ≡ƒîƒ Features
+-- **Real-time Messaging:** Lightning-fast WebSocket communication broadcasting messages instantly to crewmates.
+-- **Persistent Chat History:** All messages are securely saved to MongoDB. History is automatically fetched when joining or reconnecting.
+-- **Clear Chat:** Wipes room history from the database and instantly synchronizes the clear event across all connected clients.
+-- **Smart Reconnection:** Built-in WebSocket reconnection logic with exponential backoff to handle network drops smoothly.
+-- **Session Persistence:** Login state is saved in `localStorage`, keeping users in their chat rooms even after a page refresh.
+-- **Live Presence & Typing Indicators:** See who is currently aboard and who is actively typing.
+-- **One Piece Theme:** Custom nautical UI featuring rolling CSS waves, a Thousand Sunny graphic, and 'Pirata One' typography.
++Built with **FastAPI (WebSockets)**, **React**, and **MongoDB**, this app provides a seamless and persistent chat experience for users sailing the Grand Line.
++
++## Γ£¿ Features
++
++- ΓÜí **Real-time Messaging:** Lightning-fast WebSocket communication broadcasting messages instantly to crewmates.
++- ≡ƒÆ╛ **Persistent Chat History:** All messages are securely saved to MongoDB. History is automatically fetched when joining or reconnecting.
++- ≡ƒº╣ **Clear Chat:** Wipes room history from the database and instantly synchronizes the clear event across all connected clients.
++- ≡ƒöä **Smart Reconnection:** Built-in WebSocket reconnection logic with exponential backoff to handle network drops smoothly.
++- ≡ƒì¬ **Session Persistence:** Login state is saved securely, keeping users in their chat rooms even after a page refresh.
++- ≡ƒƒó **Live Presence & Typing Indicators:** See who is currently aboard and who is actively typing.
++- ≡ƒÄ¿ **One Piece Theme:** Custom nautical UI featuring rolling CSS waves, a Thousand Sunny graphic, and 'Pirata One' typography.
+ 
+ ## ≡ƒ¢á∩╕Å Tech Stack
+-- **Frontend:** React + Vite, raw CSS (no UI frameworks)
+-- **Backend:** Python + FastAPI, native WebSockets, pyjwt, Motor (async MongoDB driver)
+-- **Database:** MongoDB
+-- **Cache/Session:** Redis (for JWT refresh tokens)
+-- **Deployment:** Fully Dockerized, `docker-compose` orchestration, `.env` management, dynamic port bindings ready for PaaS (Render, Heroku).
+ 
+-## ≡ƒÜÇ Run Locally with Docker
++| Frontend | Backend | Infrastructure |
++|----------|---------|----------------|
++| React + Vite | Python + FastAPI | MongoDB |
++| Raw CSS (No UI Frameworks) | Native WebSockets | Redis |
++| | PyJWT, Motor (Async) | Docker & Docker Compose |
+ 
+-1. Ensure Docker is installed and running.
++## ≡ƒÜÇ Run Locally
++
++1. Ensure **Docker** is installed and running.
+ 2. Clone the repository.
+ 3. Spin up the containers:
+ 
+@@ -28,29 +44,33 @@ A fully-featured, real-time chat application inspired by One Piece. Built with F
+ docker compose up --build
+ ```
+ 
++### ≡ƒôì Services
+ - **Frontend UI:** `http://localhost:5173`
+ - **Backend API:** `http://localhost:8000`
+-- **MongoDB Database:** Safely exposed on `mongodb://localhost:27018` for local inspection (e.g., via MongoDB Compass).
+-- **Redis Cache:** Accessible on `localhost:6379`.
++- **MongoDB Database:** `mongodb://localhost:27018`
++- **Redis Cache:** `localhost:6379`
++
++Open the frontend in multiple browser tabs, choose the same room name, and start chatting!
+ 
+-### ≡ƒöÉ Authentication API
++## ≡ƒöÉ Authentication API
+ 
+-With the recent update, users must register and log in to get access. Refresh tokens are securely stored in Redis.
+-- **POST** `/api/auth/register` - Create an account
+-- **POST** `/api/auth/login` - Login and get JWT access & refresh tokens
+-- **POST** `/api/auth/refresh` - Swap a refresh token for a new access token
+-- **POST** `/api/auth/logout` - Invalidate the refresh token in Redis
++Users must register and log in to get access. Refresh tokens are securely stored in Redis.
+ 
+-Open the frontend in multiple browser tabs, choose the same room name, and start chatting!
++- `POST /api/auth/register` - Create an account
++- `POST /api/auth/login` - Login and get JWT access & refresh tokens
++- `POST /api/auth/refresh` - Swap a refresh token for a new access token
++- `POST /api/auth/logout` - Invalidate the refresh token in Redis
+ 
+ ## ≡ƒÜó Deployment Ready
+ 
+ This repository is optimized for modern deployment stacks (e.g., Render + Vercel + MongoDB Atlas). 
++
+ - **Configuration:** No hardcoded secrets. Uses `.env` for environment variables.
+ - **Portability:** The backend dynamically binds to the `$PORT` environment variable.
+ - **Secure WebSockets:** The frontend automatically upgrades `http://` to `https://` and `ws://` to `wss://` in production.
+ 
+ ## ≡ƒôü Project Structure
++
+ ```text
+ grandline/
+ Γö£ΓöÇΓöÇ docker-compose.yml
+diff --git a/backend/app/main.py b/backend/app/main.py
+index 6fc9f7d..73f09d0 100644
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@ -66,21 +66,21 @@ async def get_history(room: str, limit: int = Query(30, le=200), user: dict = De
+ 
+     cached = await redis_client.lrange(f"room:{room}:history", 0, -1)
+     if cached:
+-        return [json.loads(m) for m in cached]
+-
+-    cursor = (
+-        messages_collection.find({"room": room, "type": {"$ne": "system"}})
+-        .sort("timestamp", -1)
+-        .limit(30)
+-    )
+-    docs = [doc async for doc in cursor]
+-    docs.reverse()
+-    messages = [serialize_message(doc) for doc in docs]
+-    
+-    if messages:
+-        # Repopulate cache
+-        await redis_client.delete(f"room:{room}:history")
+-        await redis_client.rpush(f"room:{room}:history", *[json.dumps(m) for m in messages])
++        messages = [json.loads(m) for m in cached]
++    else:
++        cursor = (
++            messages_collection.find({"room": room, "type": {"$ne": "system"}})
++            .sort("timestamp", -1)
++            .limit(30)
++        )
++        docs = [doc async for doc in cursor]
++        docs.reverse()
++        messages = [serialize_message(doc) for doc in docs]
++        
++        if messages:
++            # Repopulate cache
++            await redis_client.delete(f"room:{room}:history")
++            await redis_client.rpush(f"room:{room}:history", *[json.dumps(m) for m in messages])
+         
+     # --- Attach live read receipts ---
+     if messages:
+@@ -94,7 +94,7 @@ async def get_history(room: str, limit: int = Query(30, le=200), user: dict = De
+     return messages
+ 
+ 
+-async def save_message(room: str, username: str, text: str) -> dict:
++async def save_message(room: str, username: str, text: str, reply_to: dict = None) -> dict:
+     from .kafka_client import publish_db_write
+     
+     doc = {
+@@ -106,6 +106,9 @@ async def save_message(room: str, username: str, text: str) -> dict:
+         "type": "message",
+     }
+     
++    if reply_to:
++        doc["reply_to"] = reply_to
++    
+     # 1. Throw it onto the Kafka belt for the background script to save!
+     await publish_db_write(doc)
+     
+@@ -148,6 +151,7 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
+ 
+             if event_type == "message":
+                 text = (data.get("text") or "").strip()
++                reply_to = data.get("reply_to")
+                 if not text:
+                     continue
+                 
+@@ -167,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
+                     continue
+                 # ------------------------------------------------
+                 
+-                msg = await save_message(room, username, text[:2000])
++                msg = await save_message(room, username, text[:2000], reply_to)
+                 await manager.broadcast(room, msg)
+ 
+             elif event_type == "typing":
+diff --git a/bugs.md b/bugs.md
+index b86ff05..72d44fa 100644
+--- a/bugs.md
++++ b/bugs.md
+@@ -50,3 +50,19 @@ The frontend's `ws.onclose` event handler treated all disconnections equally. Wh
+ 
+ **Solution:**
+ We added an explicit intercept in the `ws.onclose` listener for the `1008` close code. If this specific code is detected, the frontend logs a warning to the console and aborts the auto-reconnect loop entirely, gracefully accepting the eviction and saving system resources.
++
++---
++
++## 4. The Production "Unseen" Bug
++
++**The Problem Faced:**
++In production, the "seen" (read receipts) feature worked flawlessly for active users chatting in real time. However, when users refreshed the page or joined a room later, historical messages didn't show who had read them, making it look like the feature was completely broken.
++
++**The Bug Discovered:**
++When fetching chat history via `/api/rooms/{room}/messages`, the backend had a fast-path that returned messages directly from the Redis cache (`room:{room}:history`). Because the backend attached read receipts *after* the caching logic but conditionally skipped it if the cache was hit, cached messages were returned bare, without their associated `readers` field populated.
++
++**Cause:**
++When a message was originally sent, it was immediately added to the Redis list cache (for lightning-fast load times). At that exact instant, the message had zero readers. Later, as users read the message, their names were added to a separate Redis set (`msg:{id}:read_by`). The history endpoint's `if cached:` short-circuit returned the original cached payload without executing the subsequent pipeline block that dynamically stitched the `msg:{id}:read_by` sets onto the returned message objects.
++
++**Solution:**
++We refactored the history fetching logic to separate the retrieval of the base messages from the attachment of the live read receipts. Now, whether the base messages are pulled from the lightning-fast Redis cache or from the MongoDB fallback, the request *always* flows through the Redis pipeline block that queries the `msg:{id}:read_by` sets and attaches the live readers to each message before returning the payload to the client.
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index 50bac85..538367a 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -75,7 +75,7 @@ export default function App() {
+       if (navigator.sendBeacon) {
+         navigator.sendBeacon(url);
+       } else {
+-        fetch(url, { method: "POST", keepalive: true }).catch(() => {});
++        fetch(url, { method: "POST", keepalive: true }).catch(() => { });
+       }
+     };
+ 
+@@ -91,7 +91,7 @@ export default function App() {
+         // Immediately push state back to the room before the confirm dialog blocks the thread
+         // This ensures that even if they spam back, there's always history ahead of them.
+         window.history.pushState({ page: "inroom" }, "", `#${group.id}`);
+-        
++
+         const confirmLeave = window.confirm("Are you sure you want to leave this crew?");
+         if (confirmLeave) {
+           setCurrentGroup(null);
+@@ -113,7 +113,7 @@ export default function App() {
+ 
+     window.addEventListener("popstate", handlePopState);
+     window.addEventListener("beforeunload", handleBeforeUnload);
+-    
++
+     return () => {
+       window.removeEventListener("popstate", handlePopState);
+       window.removeEventListener("beforeunload", handleBeforeUnload);
+diff --git a/frontend/src/components/ChatRoom.jsx b/frontend/src/components/ChatRoom.jsx
+index 85e9340..e58b768 100644
+--- a/frontend/src/components/ChatRoom.jsx
++++ b/frontend/src/components/ChatRoom.jsx
+@@ -35,6 +35,18 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+   const [draft, setDraft] = useState("");
+   const [typingUsers, setTypingUsers] = useState([]);
+   const [userStatuses, setUserStatuses] = useState({}); // { username: "active" | "away" }
++  const [replyingTo, setReplyingTo] = useState(null);
++  const [expandedSeen, setExpandedSeen] = useState({});
++  const [expandedMessages, setExpandedMessages] = useState({});
++  const [showAllUsers, setShowAllUsers] = useState(false);
++
++  const toggleSeen = (msgId) => {
++    setExpandedSeen(prev => ({ ...prev, [msgId]: !prev[msgId] }));
++  };
++
++  const toggleMessage = (msgId) => {
++    setExpandedMessages(prev => ({ ...prev, [msgId]: !prev[msgId] }));
++  };
+ 
+   const wsRef = useRef(null);
+   const scrollRef = useRef(null);
+@@ -44,6 +56,13 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+   const reconnectAttemptsRef = useRef(0);
+   const isUnmountedRef = useRef(false);
+   const pendingReadsRef = useRef([]);
++  const isAtBottomRef = useRef(true);
++
++  const handleScroll = useCallback(() => {
++    if (!scrollRef.current) return;
++    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
++    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
++  }, []);
+ 
+   const loadHistory = useCallback(async () => {
+     try {
+@@ -228,15 +247,29 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+   }, [connect]);
+ 
+   useEffect(() => {
+-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
++    if (isAtBottomRef.current && scrollRef.current) {
++      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
++    }
+   }, [messages, typingUsers]);
+ 
+   function sendMessage(e) {
+     e.preventDefault();
+     const text = draft.trim();
+     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return;
+-    wsRef.current.send(JSON.stringify({ type: "message", text }));
++    
++    const payload = { type: "message", text };
++    if (replyingTo) {
++      payload.reply_to = {
++        id: replyingTo.id,
++        username: replyingTo.username,
++        text: replyingTo.text
++      };
++    }
++    
++    wsRef.current.send(JSON.stringify(payload));
+     setDraft("");
++    setReplyingTo(null);
++    isAtBottomRef.current = true; // Force scroll to bottom when sending a message
+     if (typingTimeoutRef.current) {
+       clearTimeout(typingTimeoutRef.current);
+       typingTimeoutRef.current = null;
+@@ -285,7 +318,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+ 
+         <div className="sidebar-section">
+           <h3 style={{ fontFamily: 'var(--font-pirate)', fontSize: '20px', color: '#e7e9f5', textTransform: 'none', letterSpacing: '1px' }}>Crew on deck</h3>
+-          {members.map((m) => {
++          {(showAllUsers ? members : members.slice(0, 8)).map((m) => {
+             const isAway = userStatuses[m.username] === "away";
+             return (
+               <div className={`user-row ${!m.is_online ? "offline" : ""}`} key={m.username} style={{ opacity: m.is_online ? (isAway ? 0.7 : 1) : 0.5 }}>
+@@ -295,6 +328,24 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+               </div>
+             );
+           })}
++          {members.length > 8 && (
++            <button 
++              onClick={() => setShowAllUsers(!showAllUsers)}
++              style={{
++                background: "transparent",
++                border: "1px solid var(--border)",
++                color: "var(--text-dim)",
++                fontSize: "12px",
++                width: "100%",
++                padding: "6px",
++                borderRadius: "6px",
++                marginTop: "10px",
++                cursor: "pointer",
++              }}
++            >
++              {showAllUsers ? "Show less" : `Show all (${members.length})`}
++            </button>
++          )}
+         </div>
+ 
+         <div className="sidebar-footer">
+@@ -337,7 +388,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+           </div>
+         </div>
+ 
+-        <div className="messages-pane" ref={scrollRef}>
++        <div className="messages-pane" ref={scrollRef} onScroll={handleScroll}>
+           {messages.length === 0 && (
+             <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', marginTop: 'auto', marginBottom: 'auto' }}>
+               <svg width="100" height="100" viewBox="0 0 100 100" style={{ marginBottom: '15px' }}>
+@@ -389,10 +440,54 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+                       </div>
+                     )}
+                     {mine && <div className="msg-meta">{timeLabel(m.timestamp)}</div>}
+-                    <div className="bubble">{m.text}</div>
++                    <div className="bubble-container">
++                      {m.reply_to && (
++                        <div className="replied-msg">
++                          <strong>{m.reply_to.username}</strong>
++                          <p>{m.reply_to.text}</p>
++                        </div>
++                      )}
++                      <div className="bubble">
++                        {m.text.length > 300 && !expandedMessages[m.id] ? `${m.text.slice(0, 300)}...` : m.text}
++                        {m.text.length > 300 && (
++                          <button 
++                            onClick={() => toggleMessage(m.id)}
++                            style={{
++                              background: "none",
++                              border: "none",
++                              color: "var(--accent)",
++                              fontSize: "12px",
++                              cursor: "pointer",
++                              padding: "0 4px",
++                              fontWeight: "bold"
++                            }}
++                          >
++                            {expandedMessages[m.id] ? "Show less" : "Read more"}
++                          </button>
++                        )}
++                      </div>
++                    </div>
++                    <button className="reply-btn" onClick={() => setReplyingTo(m)}>Reply</button>
+                     {mine && m.readers && m.readers.filter(r => r !== username).length > 0 && (
+                       <div style={{fontSize: "11px", color: "gray", marginTop: "4px", textAlign: mine ? "right" : "left"}}>
+-                        ≡ƒæü∩╕Å {m.readers.filter(r => r !== username).join(", ")}
++                        {!expandedSeen[m.id] ? (
++                          <button 
++                            onClick={() => toggleSeen(m.id)}
++                            style={{
++                              background: "none", 
++                              border: "none", 
++                              color: "var(--text-dim)", 
++                              fontSize: "11px", 
++                              cursor: "pointer", 
++                              textDecoration: "underline",
++                              padding: 0
++                            }}
++                          >
++                            Seen by
++                          </button>
++                        ) : (
++                          <span>≡ƒæü∩╕Å {m.readers.filter(r => r !== username).join(", ")}</span>
++                        )}
+                       </div>
+                     )}
+                   </div>
+@@ -408,17 +503,28 @@ export default function ChatRoom({ username, group, token, onLeave }) {
+             : ""}
+         </div>
+ 
+-        <form className="composer" onSubmit={sendMessage}>
+-          <input
+-            placeholder={`Message #${room}`}
+-            value={draft}
+-            onChange={handleDraftChange}
+-            maxLength={2000}
+-          />
+-          <button className="send-btn" type="submit" disabled={!draft.trim() || !connected} style={{ width: 'auto', padding: '0 20px', background: 'var(--accent)', color: '#0a1922', fontWeight: '600' }}>
+-            Send Γ₧ñ
+-          </button>
+-        </form>
++        <div className="composer-container">
++          {replyingTo && (
++            <div className="reply-preview">
++              <div className="reply-preview-content">
++                <strong>Replying to {replyingTo.username}</strong>
++                <p>{replyingTo.text}</p>
++              </div>
++              <button type="button" className="reply-cancel" onClick={() => setReplyingTo(null)}>├ù</button>
++            </div>
++          )}
++          <form className="composer" onSubmit={sendMessage}>
++            <input
++              placeholder={`Message #${room}`}
++              value={draft}
++              onChange={handleDraftChange}
++              maxLength={2000}
++            />
++            <button className="send-btn" type="submit" disabled={!draft.trim() || !connected} style={{ width: 'auto', padding: '0 20px', background: 'var(--accent)', color: '#0a1922', fontWeight: '600' }}>
++              Send Γ₧ñ
++            </button>
++          </form>
++        </div>
+       </main>
+     </div>
+   );
+diff --git a/frontend/src/components/Login.jsx b/frontend/src/components/Login.jsx
+index 02e0126..6786dfe 100644
+--- a/frontend/src/components/Login.jsx
++++ b/frontend/src/components/Login.jsx
+@@ -40,7 +40,7 @@ export default function Login({ onAuth }) {
+     e.preventDefault();
+     const name = username.trim();
+     const pass = password.trim();
+-    
++
+     if (!name || !pass) {
+       setError("Please fill in all required fields.");
+       return;
+@@ -120,8 +120,8 @@ export default function Login({ onAuth }) {
+ 
+         <div className="op-card">
+           <div className="op-tabs">
+-            <button 
+-              type="button" 
++            <button
++              type="button"
+               className={`op-tab ${!isRegistering ? 'active' : ''}`}
+               onClick={() => {
+                 setIsRegistering(false);
+@@ -130,8 +130,8 @@ export default function Login({ onAuth }) {
+             >
+               Log in
+             </button>
+-            <button 
+-              type="button" 
++            <button
++              type="button"
+               className={`op-tab ${isRegistering ? 'active' : ''}`}
+               onClick={() => {
+                 setIsRegistering(true);
+@@ -226,8 +226,8 @@ export default function Login({ onAuth }) {
+ 
+             <div className="op-footer">
+               <span>{isRegistering ? "Already have an account?" : "New to the crew?"}</span>
+-              <button 
+-                type="button" 
++              <button
++                type="button"
+                 className="op-btn-link"
+                 onClick={() => {
+                   setIsRegistering(!isRegistering);
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+index bed3494..d879be8 100644
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -959,3 +959,117 @@ input {
+   animation: ship-bob 3s ease-in-out infinite, ship-sail 40s linear infinite;
+   z-index: 11;
+ }
++
++/* ---------- Reply Feature ---------- */
++
++.reply-btn {
++  background: transparent;
++  border: none;
++  color: var(--text-dim);
++  font-size: 11px;
++  cursor: pointer;
++  opacity: 0;
++  transition: opacity 0.2s, color 0.2s;
++  padding: 0 8px;
++  margin-top: 4px;
++}
++
++.msg-body:hover .reply-btn {
++  opacity: 1;
++}
++
++.reply-btn:hover {
++  color: var(--accent);
++  text-decoration: underline;
++}
++
++.msg-row.mine .reply-btn {
++  text-align: right;
++  display: block;
++}
++
++.bubble-container {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++}
++
++.msg-row.mine .bubble-container {
++  align-items: flex-end;
++}
++
++.replied-msg {
++  background: rgba(0, 0, 0, 0.2);
++  border-left: 3px solid var(--accent);
++  padding: 6px 10px;
++  border-radius: 4px;
++  margin-bottom: 4px;
++  font-size: 12px;
++  color: var(--text-dim);
++  max-width: 100%;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.replied-msg strong {
++  display: block;
++  color: var(--accent);
++  margin-bottom: 2px;
++}
++
++.replied-msg p {
++  margin: 0;
++  text-overflow: ellipsis;
++  overflow: hidden;
++}
++
++.composer-container {
++  display: flex;
++  flex-direction: column;
++  background: var(--bg-panel);
++}
++
++.reply-preview {
++  display: flex;
++  justify-content: space-between;
++  align-items: center;
++  padding: 10px 24px;
++  background: var(--bg-hover);
++  border-top: 1px solid var(--border);
++  border-left: 4px solid var(--accent);
++}
++
++.reply-preview-content {
++  font-size: 13px;
++  color: var(--text);
++  overflow: hidden;
++}
++
++.reply-preview-content strong {
++  color: var(--accent);
++  display: block;
++  margin-bottom: 2px;
++}
++
++.reply-preview-content p {
++  margin: 0;
++  color: var(--text-dim);
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++
++.reply-cancel {
++  background: transparent;
++  border: none;
++  color: var(--text-dim);
++  font-size: 20px;
++  cursor: pointer;
++  padding: 0 8px;
++}
++
++.reply-cancel:hover {
++  color: var(--danger);
++}
++

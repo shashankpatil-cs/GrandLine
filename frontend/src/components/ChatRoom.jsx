@@ -35,6 +35,18 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   const [draft, setDraft] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
   const [userStatuses, setUserStatuses] = useState({}); // { username: "active" | "away" }
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [expandedSeen, setExpandedSeen] = useState({});
+  const [expandedMessages, setExpandedMessages] = useState({});
+  const [showAllUsers, setShowAllUsers] = useState(false);
+
+  const toggleSeen = (msgId) => {
+    setExpandedSeen(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+  };
+
+  const toggleMessage = (msgId) => {
+    setExpandedMessages(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+  };
 
   const wsRef = useRef(null);
   const scrollRef = useRef(null);
@@ -44,6 +56,13 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   const reconnectAttemptsRef = useRef(0);
   const isUnmountedRef = useRef(false);
   const pendingReadsRef = useRef([]);
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    isAtBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
+  }, []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -228,15 +247,29 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   }, [connect]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    if (isAtBottomRef.current && scrollRef.current) {
+      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    }
   }, [messages, typingUsers]);
 
   function sendMessage(e) {
     e.preventDefault();
     const text = draft.trim();
     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "message", text }));
+    
+    const payload = { type: "message", text };
+    if (replyingTo) {
+      payload.reply_to = {
+        id: replyingTo.id,
+        username: replyingTo.username,
+        text: replyingTo.text
+      };
+    }
+    
+    wsRef.current.send(JSON.stringify(payload));
     setDraft("");
+    setReplyingTo(null);
+    isAtBottomRef.current = true; // Force scroll to bottom when sending a message
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = null;
@@ -285,7 +318,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
 
         <div className="sidebar-section">
           <h3 style={{ fontFamily: 'var(--font-pirate)', fontSize: '20px', color: '#e7e9f5', textTransform: 'none', letterSpacing: '1px' }}>Crew on deck</h3>
-          {members.map((m) => {
+          {(showAllUsers ? members : members.slice(0, 8)).map((m) => {
             const isAway = userStatuses[m.username] === "away";
             return (
               <div className={`user-row ${!m.is_online ? "offline" : ""}`} key={m.username} style={{ opacity: m.is_online ? (isAway ? 0.7 : 1) : 0.5 }}>
@@ -295,6 +328,24 @@ export default function ChatRoom({ username, group, token, onLeave }) {
               </div>
             );
           })}
+          {members.length > 8 && (
+            <button 
+              onClick={() => setShowAllUsers(!showAllUsers)}
+              style={{
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--text-dim)",
+                fontSize: "12px",
+                width: "100%",
+                padding: "6px",
+                borderRadius: "6px",
+                marginTop: "10px",
+                cursor: "pointer",
+              }}
+            >
+              {showAllUsers ? "Show less" : `Show all (${members.length})`}
+            </button>
+          )}
         </div>
 
         <div className="sidebar-footer">
@@ -337,7 +388,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
           </div>
         </div>
 
-        <div className="messages-pane" ref={scrollRef}>
+        <div className="messages-pane" ref={scrollRef} onScroll={handleScroll}>
           {messages.length === 0 && (
             <div className="empty-state" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', marginTop: 'auto', marginBottom: 'auto' }}>
               <svg width="100" height="100" viewBox="0 0 100 100" style={{ marginBottom: '15px' }}>
@@ -389,10 +440,54 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                       </div>
                     )}
                     {mine && <div className="msg-meta">{timeLabel(m.timestamp)}</div>}
-                    <div className="bubble">{m.text}</div>
+                    <div className="bubble-container">
+                      {m.reply_to && (
+                        <div className="replied-msg">
+                          <strong>{m.reply_to.username}</strong>
+                          <p>{m.reply_to.text}</p>
+                        </div>
+                      )}
+                      <div className="bubble">
+                        {m.text.length > 300 && !expandedMessages[m.id] ? `${m.text.slice(0, 300)}...` : m.text}
+                        {m.text.length > 300 && (
+                          <button 
+                            onClick={() => toggleMessage(m.id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "var(--accent)",
+                              fontSize: "12px",
+                              cursor: "pointer",
+                              padding: "0 4px",
+                              fontWeight: "bold"
+                            }}
+                          >
+                            {expandedMessages[m.id] ? "Show less" : "Read more"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <button className="reply-btn" onClick={() => setReplyingTo(m)}>Reply</button>
                     {mine && m.readers && m.readers.filter(r => r !== username).length > 0 && (
                       <div style={{fontSize: "11px", color: "gray", marginTop: "4px", textAlign: mine ? "right" : "left"}}>
-                        👁️ {m.readers.filter(r => r !== username).join(", ")}
+                        {!expandedSeen[m.id] ? (
+                          <button 
+                            onClick={() => toggleSeen(m.id)}
+                            style={{
+                              background: "none", 
+                              border: "none", 
+                              color: "var(--text-dim)", 
+                              fontSize: "11px", 
+                              cursor: "pointer", 
+                              textDecoration: "underline",
+                              padding: 0
+                            }}
+                          >
+                            Seen by
+                          </button>
+                        ) : (
+                          <span>👁️ {m.readers.filter(r => r !== username).join(", ")}</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -408,17 +503,28 @@ export default function ChatRoom({ username, group, token, onLeave }) {
             : ""}
         </div>
 
-        <form className="composer" onSubmit={sendMessage}>
-          <input
-            placeholder={`Message #${room}`}
-            value={draft}
-            onChange={handleDraftChange}
-            maxLength={2000}
-          />
-          <button className="send-btn" type="submit" disabled={!draft.trim() || !connected} style={{ width: 'auto', padding: '0 20px', background: 'var(--accent)', color: '#0a1922', fontWeight: '600' }}>
-            Send ➤
-          </button>
-        </form>
+        <div className="composer-container">
+          {replyingTo && (
+            <div className="reply-preview">
+              <div className="reply-preview-content">
+                <strong>Replying to {replyingTo.username}</strong>
+                <p>{replyingTo.text}</p>
+              </div>
+              <button type="button" className="reply-cancel" onClick={() => setReplyingTo(null)}>×</button>
+            </div>
+          )}
+          <form className="composer" onSubmit={sendMessage}>
+            <input
+              placeholder={`Message #${room}`}
+              value={draft}
+              onChange={handleDraftChange}
+              maxLength={2000}
+            />
+            <button className="send-btn" type="submit" disabled={!draft.trim() || !connected} style={{ width: 'auto', padding: '0 20px', background: 'var(--accent)', color: '#0a1922', fontWeight: '600' }}>
+              Send ➤
+            </button>
+          </form>
+        </div>
       </main>
     </div>
   );

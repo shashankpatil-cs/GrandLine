@@ -54,17 +54,28 @@ async def init_kafka(local_broadcast_callback):
 
     consumer_task = asyncio.create_task(consume())
 
+from bson import ObjectId
+from datetime import datetime
+
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, ObjectId):
+            return str(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
 async def publish_broadcast(payload: dict):
     if producer:
-        await producer.send_and_wait("chat_broadcast", json.dumps(payload).encode('utf-8'))
+        await producer.send_and_wait("chat_broadcast", json.dumps(payload, cls=CustomJSONEncoder).encode('utf-8'))
 
 async def publish_db_write(payload: dict):
     if producer:
-        await producer.send_and_wait("chat.messages.new", json.dumps(payload).encode('utf-8'))
+        await producer.send_and_wait("chat.messages.new", json.dumps(payload, cls=CustomJSONEncoder).encode('utf-8'))
 
 async def publish_read_receipt(payload: dict):
     if producer:
-        await producer.send_and_wait("chat.reads", json.dumps(payload).encode('utf-8'))
+        await producer.send_and_wait("chat.reads", json.dumps(payload, cls=CustomJSONEncoder).encode('utf-8'))
 
 async def close_kafka():
     if producer:

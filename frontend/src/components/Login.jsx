@@ -40,7 +40,7 @@ export default function Login({ onAuth }) {
     e.preventDefault();
     const name = username.trim();
     const pass = password.trim();
-    
+
     if (!name || !pass) {
       setError("Please fill in all required fields.");
       return;
@@ -120,8 +120,8 @@ export default function Login({ onAuth }) {
 
         <div className="op-card">
           <div className="op-tabs">
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`op-tab ${!isRegistering ? 'active' : ''}`}
               onClick={() => {
                 setIsRegistering(false);
@@ -130,8 +130,8 @@ export default function Login({ onAuth }) {
             >
               Log in
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`op-tab ${isRegistering ? 'active' : ''}`}
               onClick={() => {
                 setIsRegistering(true);
@@ -226,8 +226,8 @@ export default function Login({ onAuth }) {
 
             <div className="op-footer">
               <span>{isRegistering ? "Already have an account?" : "New to the crew?"}</span>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="op-btn-link"
                 onClick={() => {
                   setIsRegistering(!isRegistering);

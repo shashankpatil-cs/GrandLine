@@ -66,21 +66,21 @@ async def get_history(room: str, limit: int = Query(30, le=200), user: dict = De
 
     cached = await redis_client.lrange(f"room:{room}:history", 0, -1)
     if cached:
-        return [json.loads(m) for m in cached]
-
-    cursor = (
-        messages_collection.find({"room": room, "type": {"$ne": "system"}})
-        .sort("timestamp", -1)
-        .limit(30)
-    )
-    docs = [doc async for doc in cursor]
-    docs.reverse()
-    messages = [serialize_message(doc) for doc in docs]
-    
-    if messages:
-        # Repopulate cache
-        await redis_client.delete(f"room:{room}:history")
-        await redis_client.rpush(f"room:{room}:history", *[json.dumps(m) for m in messages])
+        messages = [json.loads(m) for m in cached]
+    else:
+        cursor = (
+            messages_collection.find({"room": room, "type": {"$ne": "system"}})
+            .sort("timestamp", -1)
+            .limit(30)
+        )
+        docs = [doc async for doc in cursor]
+        docs.reverse()
+        messages = [serialize_message(doc) for doc in docs]
+        
+        if messages:
+            # Repopulate cache
+            await redis_client.delete(f"room:{room}:history")
+            await redis_client.rpush(f"room:{room}:history", *[json.dumps(m) for m in messages])
         
     # --- Attach live read receipts ---
     if messages:
@@ -94,7 +94,7 @@ async def get_history(room: str, limit: int = Query(30, le=200), user: dict = De
     return messages
 
 
-async def save_message(room: str, username: str, text: str) -> dict:
+async def save_message(room: str, username: str, text: str, reply_to: dict = None) -> dict:
     from .kafka_client import publish_db_write
     
     doc = {
@@ -105,6 +105,9 @@ async def save_message(room: str, username: str, text: str) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "type": "message",
     }
+    
+    if reply_to:
+        doc["reply_to"] = reply_to
     
     # 1. Throw it onto the Kafka belt for the background script to save!
     await publish_db_write(doc)
@@ -148,6 +151,7 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
 
             if event_type == "message":
                 text = (data.get("text") or "").strip()
+                reply_to = data.get("reply_to")
                 if not text:
                     continue
                 
@@ -167,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
                     continue
                 # ------------------------------------------------
                 
-                msg = await save_message(room, username, text[:2000])
+                msg = await save_message(room, username, text[:2000], reply_to)
                 await manager.broadcast(room, msg)
 
             elif event_type == "typing":
