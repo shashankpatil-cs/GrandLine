@@ -140,6 +140,19 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
     await manager.connect(room, username, websocket)
 
     try:
+        # Create a background keep-alive ping task
+        async def keep_alive():
+            try:
+                while True:
+                    await asyncio.sleep(30)
+                    await websocket.send_json({"type": "ping"})
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+        ping_task = asyncio.create_task(keep_alive())
+        
         while True:
             raw = await websocket.receive_text()
             try:
@@ -216,6 +229,11 @@ async def websocket_endpoint(websocket: WebSocket, room: str, token: str = Query
                         {"type": "status_update", "room": room, "statuses": statuses}
                     )
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect as e:
+        print(f"[WS] Client disconnected normally: {e.code}")
+    except Exception as e:
+        print(f"[WS] Exception in websocket loop for {username}: {repr(e)}")
+    finally:
+        ping_task.cancel()
         manager.disconnect(room, websocket)
 

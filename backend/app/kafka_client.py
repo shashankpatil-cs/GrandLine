@@ -40,17 +40,23 @@ async def init_kafka(local_broadcast_callback):
     await consumer.start()
 
     async def consume():
-        try:
-            async for msg in consumer:
-                try:
-                    payload = json.loads(msg.value.decode('utf-8'))
-                    room = payload.get("room")
-                    if room and payload:
-                        await local_broadcast_callback(room, payload)
-                except Exception as e:
-                    print(f"Kafka consume error: {e}")
-        finally:
-            await consumer.stop()
+        while True:
+            try:
+                async for msg in consumer:
+                    try:
+                        payload = json.loads(msg.value.decode('utf-8'))
+                        room = payload.get("room")
+                        if room and payload:
+                            await local_broadcast_callback(room, payload)
+                    except Exception as e:
+                        print(f"[KAFKA-CONSUMER] Processing error: {e}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[KAFKA-CONSUMER] Connection lost, retrying in 5s: {repr(e)}")
+                await asyncio.sleep(5)
+        
+        await consumer.stop()
 
     consumer_task = asyncio.create_task(consume())
 
