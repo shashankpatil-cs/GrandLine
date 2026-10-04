@@ -73,82 +73,81 @@ async def run_worker():
             
     await consumer.stop()
 
-if __name__ == "__main__":
+async def consume_reads():
+    print("Starting Reads Batch Worker...", flush=True)
+    redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    producer = AIOKafkaProducer(**get_kafka_kwargs())
+    await producer.start()
     
-    async def consume_reads():
-        print("Starting Reads Batch Worker...", flush=True)
-        redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-        producer = AIOKafkaProducer(**get_kafka_kwargs())
-        await producer.start()
-        
-        consumer_reads = AIOKafkaConsumer(
-            "chat.reads",
-            group_id="db_writer_reads",
-            auto_offset_reset="latest",  # Only process NEW reads on restart
-            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-            **get_kafka_kwargs()
-        )
-        await consumer_reads.start()
-        
-        while True:
-            try:
-                while True:
-                    # Get up to 1000 reads, waiting up to 1000ms
-                    data = await consumer_reads.getmany(timeout_ms=1000, max_records=1000)
-                    if not data:
-                        continue
-                    
-                    reads_batch = {}
-                    for tp, messages in data.items():
-                        for msg in messages:
-                            doc = msg.value
-                            mid = doc.get("message_id")
-                            uname = doc.get("username")
-                            rm = doc.get("room")
-                            if mid and uname:
-                                if mid not in reads_batch:
-                                    reads_batch[mid] = {"room": rm, "users": set()}
-                                reads_batch[mid]["users"].add(uname)
-                    
-                    if not reads_batch:
-                        continue
-                        
-                    # 1. Batch execute all SADD commands in one single round-trip!
-                    pipe = redis_client.pipeline()
-                    for mid, info in reads_batch.items():
-                        pipe.sadd(f"msg:{mid}:read_by", *list(info["users"]))
-                    await pipe.execute()
-                    
-                    # 2. Fetch the updated lists for broadcast
-                    pipe = redis_client.pipeline()
-                    for mid in reads_batch.keys():
-                        pipe.smembers(f"msg:{mid}:read_by")
-                    results = await pipe.execute()
-                    
-                    # 3. Broadcast to all active chat servers
-                    for idx, mid in enumerate(reads_batch.keys()):
-                        room = reads_batch[mid]["room"]
-                        readers = list(results[idx])
-                        payload = {
-                            "type": "read_receipt",
-                            "message_id": mid,
-                            "readers": sorted(readers),
-                            "room": room
-                        }
-                        await producer.send_and_wait("chat_broadcast", json.dumps(payload).encode('utf-8'))
-                    
-                    print(f"✅ Processed batch of {sum(len(info['users']) for info in reads_batch.values())} read receipts", flush=True)
-                    
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                print(f"❌ Error in reads batching, retrying in 5s: {repr(e)}", flush=True)
-                await asyncio.sleep(5)
+    consumer_reads = AIOKafkaConsumer(
+        "chat.reads",
+        group_id="db_writer_reads",
+        auto_offset_reset="latest",  # Only process NEW reads on restart
+        value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+        **get_kafka_kwargs()
+    )
+    await consumer_reads.start()
+    
+    while True:
+        try:
+            while True:
+                # Get up to 1000 reads, waiting up to 1000ms
+                data = await consumer_reads.getmany(timeout_ms=1000, max_records=1000)
+                if not data:
+                    continue
                 
-        await consumer_reads.stop()
-        await producer.stop()
-        await redis_client.close()
+                reads_batch = {}
+                for tp, messages in data.items():
+                    for msg in messages:
+                        doc = msg.value
+                        mid = doc.get("message_id")
+                        uname = doc.get("username")
+                        rm = doc.get("room")
+                        if mid and uname:
+                            if mid not in reads_batch:
+                                reads_batch[mid] = {"room": rm, "users": set()}
+                            reads_batch[mid]["users"].add(uname)
+                
+                if not reads_batch:
+                    continue
+                    
+                # 1. Batch execute all SADD commands in one single round-trip!
+                pipe = redis_client.pipeline()
+                for mid, info in reads_batch.items():
+                    pipe.sadd(f"msg:{mid}:read_by", *list(info["users"]))
+                await pipe.execute()
+                
+                # 2. Fetch the updated lists for broadcast
+                pipe = redis_client.pipeline()
+                for mid in reads_batch.keys():
+                    pipe.smembers(f"msg:{mid}:read_by")
+                results = await pipe.execute()
+                
+                # 3. Broadcast to all active chat servers
+                for idx, mid in enumerate(reads_batch.keys()):
+                    room = reads_batch[mid]["room"]
+                    readers = list(results[idx])
+                    payload = {
+                        "type": "read_receipt",
+                        "message_id": mid,
+                        "readers": sorted(readers),
+                        "room": room
+                    }
+                    await producer.send_and_wait("chat_broadcast", json.dumps(payload).encode('utf-8'))
+                
+                print(f"✅ Processed batch of {sum(len(info['users']) for info in reads_batch.values())} read receipts", flush=True)
+                
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"❌ Error in reads batching, retrying in 5s: {repr(e)}", flush=True)
+            await asyncio.sleep(5)
+            
+    await consumer_reads.stop()
+    await producer.stop()
+    await redis_client.close()
 
+if __name__ == "__main__":
     async def main():
         # Run both the Mongo writer and the Read Receipts batcher at the same time
         await asyncio.gather(

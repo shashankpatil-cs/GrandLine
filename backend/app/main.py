@@ -30,7 +30,23 @@ async def lifespan(app: FastAPI):
         await redis_client.delete(*stale_statuses)
     # Hook up Kafka consumer to manager's local broadcast function
     await init_kafka(manager.local_broadcast)
+    
+    # Run the background workers directly inside the Web Service!
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        from db_worker import run_worker, consume_reads
+        worker_task = asyncio.create_task(run_worker())
+        reads_task = asyncio.create_task(consume_reads())
+    except ImportError:
+        worker_task = None
+        reads_task = None
+        
     yield
+    
+    if worker_task: worker_task.cancel()
+    if reads_task: reads_task.cancel()
     await close_kafka()
 
 
