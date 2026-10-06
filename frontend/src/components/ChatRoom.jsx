@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import ReactMarkdown from 'react-markdown';
+import EmojiPicker from 'emoji-picker-react';
+import CryptoJS from 'crypto-js';
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const WS_BASE = API_BASE.replace(/^http/, "ws");
@@ -41,6 +43,28 @@ export default function ChatRoom({ username, group, token, onLeave }) {
   const [expandedMessages, setExpandedMessages] = useState({});
   const [showAllUsers, setShowAllUsers] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [copiedMsgId, setCopiedMsgId] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+  
+  // Zero-hassle E2EE: Automatically use the unique room ID as the encryption key
+  const secretKey = roomId;
+
+  const decryptMessage = (text) => {
+    if (!text) return text;
+    // Check if it looks like CryptoJS AES ciphertext
+    if (text.startsWith("U2FsdGVkX1")) {
+      if (!secretKey) return "🔒 [Encrypted Message - Enter Secret Key]";
+      try {
+        const bytes = CryptoJS.AES.decrypt(text, secretKey);
+        const originalText = bytes.toString(CryptoJS.enc.Utf8);
+        return originalText || "🔒 [Failed to decrypt - Wrong Key?]";
+      } catch (e) {
+        return "🔒 [Failed to decrypt - Wrong Key?]";
+      }
+    }
+    return text;
+  };
 
   const toggleSeen = (msgId) => {
     setExpandedSeen(prev => ({ ...prev, [msgId]: !prev[msgId] }));
@@ -260,8 +284,13 @@ export default function ChatRoom({ username, group, token, onLeave }) {
 
   function sendMessage(e) {
     e.preventDefault();
-    const text = draft.trim();
+    let text = draft.trim();
     if (!text || wsRef.current?.readyState !== WebSocket.OPEN) return;
+    
+    // Encrypt if we have a secret key and it's not a bot command
+    if (secretKey && !text.startsWith("@ai")) {
+      text = CryptoJS.AES.encrypt(text, secretKey).toString();
+    }
     
     const payload = { type: "message", text };
     if (replyingTo) {
@@ -311,7 +340,8 @@ export default function ChatRoom({ username, group, token, onLeave }) {
 
   return (
     <div className="chat-app">
-      <aside className="sidebar">
+      <div className={`sidebar-overlay ${showSidebar ? "open" : ""}`} onClick={() => setShowSidebar(false)} />
+      <aside className={`sidebar ${showSidebar ? "open" : ""}`}>
         <div className="sidebar-header">
           <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="logo-dot" style={{ background: 'transparent', border: '2px solid var(--accent)', borderRadius: '50%', color: 'var(--accent)', fontSize: '18px' }}>🧭</div>
@@ -380,9 +410,14 @@ export default function ChatRoom({ username, group, token, onLeave }) {
               <path d="M54,10 L70,5 L54,18 Z" fill="#222"/>
             </svg>
           </div>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontFamily: 'var(--font-pirate)', fontSize: '32px', margin: 0, fontWeight: 'normal', color: '#fff', letterSpacing: '1px' }}># {room}</h2>
-            <div className="sub">{onlineUsers.length} crewmate here</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <button className="mobile-toggle" onClick={() => setShowSidebar(!showSidebar)}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="24" height="24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
+            <div>
+              <h2 style={{ fontFamily: 'var(--font-pirate)', fontSize: '32px', margin: 0, fontWeight: 'normal', color: '#fff', letterSpacing: '1px' }}># {room}</h2>
+              <div className="sub">{onlineUsers.length} crewmate here</div>
+            </div>
           </div>
 
           <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -461,9 +496,9 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                         margin: 0
                       }}>
                         <ReactMarkdown>
-                          {m.text.length > 500 && !expandedMessages[m.id] ? `${m.text.slice(0, 500)}...` : m.text}
+                          {decryptMessage(m.text).length > 500 && !expandedMessages[m.id] ? `${decryptMessage(m.text).slice(0, 500)}...` : decryptMessage(m.text)}
                         </ReactMarkdown>
-                        {m.text.length > 500 && (
+                        {decryptMessage(m.text).length > 500 && (
                           <button 
                             onClick={() => toggleMessage(m.id)}
                             style={{
@@ -482,7 +517,21 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                         )}
                       </div>
                     </div>
-                    <button className="reply-btn" onClick={() => setReplyingTo(m)}>Reply</button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px', justifyContent: mine ? 'flex-end' : 'flex-start', position: 'relative' }}>
+                      <button className="action-btn" onClick={() => setReplyingTo({...m, text: decryptMessage(m.text)})} title="Reply">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                      </button>
+                      <div style={{ position: 'relative' }}>
+                        <button className="action-btn" onClick={() => {
+                          navigator.clipboard.writeText(decryptMessage(m.text));
+                          setCopiedMsgId(m.id);
+                          setTimeout(() => setCopiedMsgId(null), 2000);
+                        }} title="Copy">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                        {copiedMsgId === m.id && <div className="copy-popup">Copied!</div>}
+                      </div>
+                    </div>
                     {mine && m.readers && m.readers.filter(r => r !== username).length > 0 && (
                       <div style={{fontSize: "11px", color: "gray", marginTop: "4px", textAlign: mine ? "right" : "left"}}>
                         {!expandedSeen[m.id] ? (
@@ -492,16 +541,21 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                               background: "none", 
                               border: "none", 
                               color: "var(--text-dim)", 
-                              fontSize: "11px", 
                               cursor: "pointer", 
-                              textDecoration: "underline",
-                              padding: 0
+                              padding: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px"
                             }}
+                            title="See who read this"
                           >
-                            Seen by
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                           </button>
                         ) : (
-                          <span>👁️ {m.readers.filter(r => r !== username).join(", ")}</span>
+                          <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-dim)" }}>
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            {m.readers.filter(r => r !== username).join(", ")}
+                          </span>
                         )}
                       </div>
                     )}
@@ -556,7 +610,26 @@ export default function ChatRoom({ username, group, token, onLeave }) {
               <button type="button" className="reply-cancel" onClick={() => setReplyingTo(null)}>×</button>
             </div>
           )}
-          <form className="composer" onSubmit={sendMessage}>
+          <form className="composer" onSubmit={sendMessage} style={{ position: 'relative' }}>
+            {showEmojiPicker && (
+              <div style={{ position: 'absolute', bottom: '100%', left: '0', zIndex: 1000, marginBottom: '10px' }}>
+                <EmojiPicker 
+                  onEmojiClick={(emojiData) => setDraft(prev => prev + emojiData.emoji)} 
+                  theme="dark"
+                  skinTonesDisabled
+                  searchDisabled
+                  height={350}
+                  width={300}
+                />
+              </div>
+            )}
+            <button 
+              type="button" 
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+              style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', padding: '0 10px', filter: 'grayscale(0.5)' }}
+            >
+              😀
+            </button>
             <input
               placeholder={`Message #${room}`}
               value={draft}

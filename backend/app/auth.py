@@ -110,6 +110,7 @@ async def register(user: UserCreate):
 
 @router.post("/login", response_model=Token)
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     force: bool = Query(False)
 ):
@@ -143,6 +144,14 @@ async def login(
         f"refresh_token:{refresh_token}", 
         timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS), 
         user["username"]
+    )
+    
+    # Save IP and User-Agent
+    ip = request.client.host
+    user_agent = request.headers.get("user-agent", "Unknown")
+    await users_collection.update_one(
+        {"username": username}, 
+        {"$set": {"last_ip": ip, "last_os_browser": user_agent, "last_login": datetime.now(timezone.utc).isoformat()}}
     )
     
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
@@ -227,3 +236,37 @@ async def release_session(token: str = Query(None)):
     except Exception:
         pass
     return {"msg": "Session released"}
+
+
+@router.get("/admin/users")
+async def get_all_users(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    users = await users_collection.find().to_list(1000)
+    user_list = []
+    for u in users:
+        session = await redis_client.get(f"user_session:{u['username']}")
+        
+        user_list.append({
+            "username": u["username"],
+            "is_admin": u.get("is_admin", False),
+            "last_ip": u.get("last_ip", "Unknown"),
+            "last_os_browser": u.get("last_os_browser", "Unknown"),
+            "last_login": u.get("last_login", "Unknown"),
+            "is_online": bool(session)
+        })
+    return {"users": user_list}
+
+
+@router.delete("/admin/users/{target_username}")
+async def delete_user(target_username: str, current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    result = await users_collection.delete_one({"username": target_username})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    await redis_client.delete(f"user_session:{target_username}")
+    return {"message": f"User {target_username} deleted successfully"}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Login from "./components/Login.jsx";
 import Dashboard from "./components/Dashboard.jsx";
 import ChatRoom from "./components/ChatRoom.jsx";
+import Admin from "./components/Admin.jsx";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -13,6 +14,8 @@ export default function App() {
     }
     return null;
   });
+  
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const [currentGroup, setCurrentGroup] = useState(() => {
     const savedGroup = sessionStorage.getItem("currentGroup");
@@ -165,13 +168,27 @@ export default function App() {
   }
 
   if (!currentGroup) {
+    if (showAdmin) {
+      return <Admin token={session.token} onClose={() => setShowAdmin(false)} />;
+    }
+    
     return (
-      <Dashboard
-        username={session.username}
-        token={session.token}
-        onSelectRoom={handleSelectRoom}
-        onLogout={handleLogout}
-      />
+      <>
+        {session.username === "admin" && (
+          <button 
+            onClick={() => setShowAdmin(true)}
+            style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 100, background: 'var(--accent)', color: '#0a1922', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold' }}
+          >
+            👑 Open Admin Panel
+          </button>
+        )}
+        <Dashboard
+          username={session.username}
+          token={session.token}
+          onSelectRoom={handleSelectRoom}
+          onLogout={handleLogout}
+        />
+      </>
     );
   }
 

@@ -10,7 +10,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from bson import ObjectId
 
-from .database import messages_collection, init_db, redis_client, group_members_collection
+from .database import messages_collection, init_db, redis_client, group_members_collection, users_collection
 from .models import serialize_message
 from .connection_manager import manager
 from .auth import router as auth_router, get_current_user, get_user_from_token
@@ -21,6 +21,16 @@ from .groups import router as groups_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    
+    # Seed master admin
+    admin_user = os.environ.get("MASTER_ADMIN_USER")
+    admin_pass = os.environ.get("MASTER_ADMIN_PASS")
+    if admin_user and admin_pass:
+        from .auth import get_password_hash
+        existing_admin = await users_collection.find_one({"username": admin_user})
+        if not existing_admin:
+            await users_collection.insert_one({"username": admin_user, "hashed_password": get_password_hash(admin_pass), "is_admin": True})
+            
     # Clear stale online presence, user sessions, and statuses from previous runs
     stale_keys = await redis_client.keys("room:*:users")
     if stale_keys:
@@ -36,7 +46,6 @@ async def lifespan(app: FastAPI):
     
     # Run the background workers directly inside the Web Service!
     import sys
-    import os
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     try:
         from db_worker import run_worker, consume_reads
