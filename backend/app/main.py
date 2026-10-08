@@ -149,6 +149,29 @@ async def save_message(room: str, username: str, text: str, reply_to: dict = Non
     return msg
 
 
+async def get_weather(location: str):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"https://wttr.in/{location}?format=3")
+            if resp.status_code == 200:
+                return resp.text
+            return "Could not fetch weather data."
+    except Exception as e:
+        return f"Error: {e}"
+
+async def search_web(query: str):
+    try:
+        from duckduckgo_search import DDGS
+        import asyncio
+        def sync_search():
+            results = DDGS().text(query, max_results=3)
+            if not results: return "No results found."
+            return "\n".join([f"- {r['title']}: {r['body']} ({r['href']})" for r in results])
+        return await asyncio.to_thread(sync_search)
+    except Exception as e:
+        return f"Error searching the web: {e}"
+
 async def generate_gpt_response(room: str, prompt: str):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -163,19 +186,106 @@ async def generate_gpt_response(room: str, prompt: str):
         await manager.broadcast(room, {"type": "typing", "room": room, "typists": ["GPT-Bot"]})
         
         model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-        
         client = openai.AsyncOpenAI(api_key=api_key)
+        
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "description": "Get the current weather for a specific location",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {"type": "string", "description": "The city and state, e.g., San Francisco, CA"}
+                        },
+                        "required": ["location"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_web",
+                    "description": "Search the web for current information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }
+        ]
+        
+        from .database import redis_client
+        import json
+        raw_history = await redis_client.lrange(f"room:{room}:history", -10, -1)
+        
+        messages = [
+            {"role": "system", "content": "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful. You have access to tools for weather and web search. The conversation history is provided below."}
+        ]
+        
+        for rh in raw_history:
+            try:
+                m = json.loads(rh)
+                if m.get("type") == "message" and m.get("text"):
+                    role = "assistant" if m.get("username") == "GPT-Bot" else "user"
+                    prefix = f"{m['username']}: " if role == "user" else ""
+                    messages.append({"role": role, "content": prefix + m["text"]})
+            except Exception:
+                pass
+                
+        # If the latest prompt isn't in history yet due to race conditions, append it manually
+        if len(messages) == 1 or messages[-1]["role"] != "user" or prompt not in messages[-1]["content"]:
+            messages.append({"role": "user", "content": prompt})
+        
         response = await client.chat.completions.create(
             model=model_name,
-            messages=[
-                {"role": "system", "content": "You are a helpful chat assistant called GPT-Bot in a group chat app called GrandLine. Keep your answers concise and helpful."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=300
+            messages=messages,
+            tools=tools,
+            tool_choice="auto",
+            max_completion_tokens=4096,
+            reasoning_effort="none"
         )
-        answer = response.choices[0].message.content
+        
+        response_message = response.choices[0].message
+        
+        if response_message.tool_calls:
+            import json
+            messages.append(response_message)
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                
+                if function_name == "get_weather":
+                    function_response = await get_weather(function_args.get("location"))
+                elif function_name == "search_web":
+                    function_response = await search_web(function_args.get("query"))
+                else:
+                    function_response = "Unknown function call"
+                    
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": function_response,
+                })
+                
+            second_response = await client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_completion_tokens=4096,
+                reasoning_effort="none"
+            )
+            answer = second_response.choices[0].message.content
+        else:
+            answer = response_message.content
+            
         msg = await save_message(room, "GPT-Bot", answer)
         await manager.broadcast(room, msg)
+        
     except Exception as e:
         from .connection_manager import manager
         msg = await save_message(room, "GPT-Bot", f"Oops! I ran into an error: {str(e)}")

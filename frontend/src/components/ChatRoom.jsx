@@ -487,7 +487,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
                       {m.reply_to && (
                         <div className="replied-msg">
                           <strong>{m.reply_to.username}</strong>
-                          <p>{m.reply_to.text}</p>
+                          <p>{m.reply_to.text && m.reply_to.text.length > 60 ? m.reply_to.text.substring(0, 60) + '...' : m.reply_to.text}</p>
                         </div>
                       )}
                       <div className="bubble markdown-body" style={{
@@ -605,7 +605,7 @@ export default function ChatRoom({ username, group, token, onLeave }) {
             <div className="reply-preview">
               <div className="reply-preview-content">
                 <strong>Replying to {replyingTo.username}</strong>
-                <p>{replyingTo.text}</p>
+                <p>{replyingTo.text && replyingTo.text.length > 60 ? replyingTo.text.substring(0, 60) + '...' : replyingTo.text}</p>
               </div>
               <button type="button" className="reply-cancel" onClick={() => setReplyingTo(null)}>×</button>
             </div>
