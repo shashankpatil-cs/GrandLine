@@ -246,8 +246,7 @@ async def generate_gpt_response(room: str, prompt: str):
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            max_completion_tokens=4096,
-            reasoning_effort="none"
+            max_completion_tokens=4096
         )
         
         response_message = response.choices[0].message
@@ -276,8 +275,7 @@ async def generate_gpt_response(room: str, prompt: str):
             second_response = await client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                max_completion_tokens=4096,
-                reasoning_effort="none"
+                max_completion_tokens=4096
             )
             answer = second_response.choices[0].message.content
         else:
