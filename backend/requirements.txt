@@ -12,3 +12,4 @@ aiokafka==0.11.0
 openai
 httpx
 duckduckgo-search
+beautifulsoup4

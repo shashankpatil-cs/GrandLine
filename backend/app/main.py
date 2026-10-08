@@ -161,6 +161,46 @@ async def get_weather(location: str):
         return f"Error: {e}"
 
 
+async def search_web(query: str):
+    try:
+        import urllib.request
+        import urllib.parse
+        from bs4 import BeautifulSoup
+        import asyncio
+        
+        def sync_search():
+            data = urllib.parse.urlencode({'q': query}).encode('utf-8')
+            req = urllib.request.Request(
+                'https://lite.duckduckgo.com/lite/',
+                data=data,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
+            )
+            html = urllib.request.urlopen(req).read().decode('utf-8')
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            results = []
+            for node in soup.find_all('tr'):
+                a_tag = node.find('a', class_='result-link')
+                if a_tag:
+                    title = a_tag.text.strip()
+                    url = a_tag.get('href', '')
+                    nxt = node.find_next_sibling('tr')
+                    snippet_td = nxt.find('td', class_='result-snippet') if nxt else None
+                    snippet = snippet_td.text.strip() if snippet_td else ""
+                    results.append(f"- {title}: {snippet} ({url})")
+                    if len(results) >= 3:
+                        break
+            
+            if not results:
+                return "No results found."
+            return "\n".join(results)
+        return await asyncio.to_thread(sync_search)
+    except Exception as e:
+        return f"Error searching the web: {e}"
+
 async def generate_gpt_response(room: str, prompt: str):
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -174,7 +214,7 @@ async def generate_gpt_response(room: str, prompt: str):
         # Show typing indicator
         await manager.broadcast(room, {"type": "typing", "room": room, "typists": ["GPT-Bot"]})
         
-        model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        model_name = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
         client = openai.AsyncOpenAI(api_key=api_key)
         
         tools = [
@@ -193,7 +233,18 @@ async def generate_gpt_response(room: str, prompt: str):
                 }
             },
             {
-                "type": "web_search"
+                "type": "function",
+                "function": {
+                    "name": "search_web",
+                    "description": "Search the web for current information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "The search query"}
+                        },
+                        "required": ["query"]
+                    }
+                }
             }
         ]
         
@@ -238,6 +289,8 @@ async def generate_gpt_response(room: str, prompt: str):
                 
                 if function_name == "get_weather":
                     function_response = await get_weather(function_args.get("location"))
+                elif function_name == "search_web":
+                    function_response = await search_web(function_args.get("query"))
                 else:
                     function_response = "Unknown function call"
                     
