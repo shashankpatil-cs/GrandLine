@@ -66,3 +66,19 @@ When a message was originally sent, it was immediately added to the Redis list c
 
 **Solution:**
 We refactored the history fetching logic to separate the retrieval of the base messages from the attachment of the live read receipts. Now, whether the base messages are pulled from the lightning-fast Redis cache or from the MongoDB fallback, the request *always* flows through the Redis pipeline block that queries the `msg:{id}:read_by` sets and attaches the live readers to each message before returning the payload to the client.
+
+---
+
+## 5. The Python Scope Shadowing Bug
+
+**The Problem Faced:**
+When launching the backend server using `docker compose up --build`, the Python container crashed immediately during startup with an `UnboundLocalError: cannot access local variable 'os' where it is not associated with a value`.
+
+**The Bug Discovered:**
+In `main.py`, we added logic inside the FastAPI `lifespan` context manager to gracefully shutdown the Kafka consumer and the `asyncio` task by reading an OS environment variable: `os.environ.get("MASTER_ADMIN_USER")`. Further down in the exact same function, we had a local variable declared named `os`.
+
+**Cause:**
+Python's lexical scoping rules dictate that if you assign a value to a variable anywhere inside a function, that variable is treated as *local* to the entire function block. Because we had `os = ...` at the bottom of the function, Python considered `os` to be a local variable for the *entire* function scope. When the code at the top of the function executed `os.environ.get()`, it tried to look up the local `os` variable before it had been assigned, resulting in the fatal `UnboundLocalError`.
+
+**Solution:**
+We removed the localized `os` variable shadowing entirely. We refactored the function to ensure the global `os` module was accessible without conflict, allowing the backend to properly read the environment variables, seed the master admin account, and gracefully boot the asynchronous background tasks.
