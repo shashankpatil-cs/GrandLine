@@ -270,12 +270,17 @@ async def generate_gpt_response(room: str, prompt: str):
         if len(messages) == 1 or messages[-1]["role"] != "user" or prompt not in messages[-1]["content"]:
             messages.append({"role": "user", "content": prompt})
         
+        kwargs = {}
+        if "luna" in model_name.lower():
+            kwargs["reasoning_effort"] = "none"
+
         response = await client.chat.completions.create(
             model=model_name,
             messages=messages,
             tools=tools,
             tool_choice="auto",
-            max_completion_tokens=4096
+            max_completion_tokens=4096,
+            **kwargs
         )
         
         response_message = response.choices[0].message
@@ -304,7 +309,8 @@ async def generate_gpt_response(room: str, prompt: str):
             second_response = await client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                max_completion_tokens=4096
+                max_completion_tokens=4096,
+                **kwargs
             )
             answer = second_response.choices[0].message.content
         else:
