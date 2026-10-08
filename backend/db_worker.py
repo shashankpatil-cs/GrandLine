@@ -3,6 +3,7 @@ import json
 import asyncio
 import ssl
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import UpdateOne
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 import redis.asyncio as redis
 from datetime import datetime
@@ -76,6 +77,11 @@ async def run_worker():
 async def consume_reads():
     print("Starting Reads Batch Worker...", flush=True)
     redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+    
+    # Connect to MongoDB
+    client = AsyncIOMotorClient(MONGO_URL)
+    db = client[DB_NAME]
+    messages_collection = db["messages"]
     producer = AIOKafkaProducer(**get_kafka_kwargs())
     await producer.start()
     
@@ -134,6 +140,21 @@ async def consume_reads():
                         "room": room
                     }
                     await producer.send_and_wait("chat_broadcast", json.dumps(payload).encode('utf-8'))
+                
+                # 4. Update MongoDB
+                bulk_ops = []
+                for mid, info in reads_batch.items():
+                    bulk_ops.append(
+                        UpdateOne(
+                            {"_id": mid},
+                            {"$addToSet": {"readers": {"$each": list(info["users"])}}}
+                        )
+                    )
+                if bulk_ops:
+                    try:
+                        await messages_collection.bulk_write(bulk_ops)
+                    except Exception as e:
+                        print(f"❌ Error updating MongoDB with reads: {e}", flush=True)
                 
                 print(f"✅ Processed batch of {sum(len(info['users']) for info in reads_batch.values())} read receipts", flush=True)
                 
