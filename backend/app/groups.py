@@ -45,7 +45,18 @@ async def list_groups(user: dict = Depends(get_current_user)):
     group_ids = [ObjectId(m["group_id"]) for m in memberships if m["status"] == "approved"]
     
     groups = await groups_collection.find({"_id": {"$in": group_ids}}).to_list(length=None)
-    return [serialize_doc(g) for g in groups]
+    
+    result = []
+    for g in groups:
+        doc = serialize_doc(g)
+        unread = await messages_collection.count_documents({
+            "room": doc["id"],
+            "username": {"$ne": user["username"]},
+            "readers": {"$ne": user["username"]}
+        })
+        doc["unread_count"] = unread
+        result.append(doc)
+    return result
 
 @router.post("/join")
 async def join_group(join_code: str, user: dict = Depends(get_current_user)):

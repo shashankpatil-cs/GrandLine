@@ -198,7 +198,22 @@ export default function Dashboard({ username, token, onSelectRoom, onLogout }) {
                   <div key={g.id}>
                     <div className="dash-list-item">
                       <div className="dash-list-info">
-                        <h4>{g.name}</h4>
+                        <h4 style={{ display: 'flex', alignItems: 'center' }}>
+                          {g.name}
+                          {g.unread_count > 0 && (
+                            <span style={{
+                              background: '#ff4757', 
+                              color: 'white', 
+                              borderRadius: '12px', 
+                              padding: '2px 8px', 
+                              fontSize: '11px', 
+                              marginLeft: '8px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                            }}>
+                              {g.unread_count} New
+                            </span>
+                          )}
+                        </h4>
                         <p>{g.admin === username ? "Admin" : "Member"}</p>
                       </div>
                       <button className="dash-btn-small" onClick={() => onSelectRoom(g)}>Enter</button>
