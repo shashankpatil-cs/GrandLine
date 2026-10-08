@@ -108,6 +108,19 @@ export default function ChatRoom({ username, group, token, onLeave }) {
       const data = await res.json();
       if (isUnmountedRef.current) return;
 
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        data.forEach(m => {
+          if (m.username !== username && m.id && (!m.readers || !m.readers.includes(username))) {
+            if (document.visibilityState === "visible") {
+              ws.send(JSON.stringify({ type: "read", message_id: m.id }));
+            } else {
+              pendingReadsRef.current.push(m.id);
+            }
+          }
+        });
+      }
+
       setMessages((prev) => {
         const map = new Map();
         for (const m of prev) {

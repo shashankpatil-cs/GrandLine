@@ -160,17 +160,6 @@ async def get_weather(location: str):
     except Exception as e:
         return f"Error: {e}"
 
-async def search_web(query: str):
-    try:
-        from duckduckgo_search import DDGS
-        import asyncio
-        def sync_search():
-            results = DDGS().text(query, max_results=3)
-            if not results: return "No results found."
-            return "\n".join([f"- {r['title']}: {r['body']} ({r['href']})" for r in results])
-        return await asyncio.to_thread(sync_search)
-    except Exception as e:
-        return f"Error searching the web: {e}"
 
 async def generate_gpt_response(room: str, prompt: str):
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -204,18 +193,7 @@ async def generate_gpt_response(room: str, prompt: str):
                 }
             },
             {
-                "type": "function",
-                "function": {
-                    "name": "search_web",
-                    "description": "Search the web for current information",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "The search query"}
-                        },
-                        "required": ["query"]
-                    }
-                }
+                "type": "web_search"
             }
         ]
         
@@ -260,8 +238,6 @@ async def generate_gpt_response(room: str, prompt: str):
                 
                 if function_name == "get_weather":
                     function_response = await get_weather(function_args.get("location"))
-                elif function_name == "search_web":
-                    function_response = await search_web(function_args.get("query"))
                 else:
                     function_response = "Unknown function call"
                     
